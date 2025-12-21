@@ -1,109 +1,4 @@
-# Hệ thống Microservices - Kiến trúc khi Scale Out
 
-## Sơ đồ kiến trúc chi tiết (Mermaid)
-
-```mermaid
-flowchart TD
-  FE["Frontend (Web/App)"]
-  LB["Load Balancer\n(Nginx/HAProxy/ELB)"]
-  APIGW1["API Gateway #1"]
-  APIGW2["API Gateway #2"]
-  APIGWn["API Gateway #n"]
-  AUTH1["Auth Service #1"]
-  AUTHn["Auth Service #n"]
-  POST1["Post Service #1"]
-  POSTn["Post Service #n"]
-  COMMENT1["Comment Service #1"]
-  COMMENTn["Comment Service #n"]
-  MEDIA1["Media Service #1"]
-  MEDIAn["Media Service #n"]
-  NOTI1["Notification Service #1\n(Socket.IO)"]
-  NOTIn["Notification Service #n\n(Socket.IO)"]
-  REDIS["Redis\n(Pub/Sub, Cache, Socket.IO Adapter)"]
-  DB["Database\n(Postgres/MySQL)"]
-  MQ["Message Broker\n(RabbitMQ)"]
-
-  FE <--> LB
-  LB <--> APIGW1
-  LB <--> APIGW2
-  LB <-.-> APIGWn
-  APIGW1 <--> AUTH1
-  APIGW1 <--> AUTHn
-  APIGW1 <--> POST1
-  APIGW1 <--> POSTn
-  APIGW1 <--> COMMENT1
-  APIGW1 <--> COMMENTn
-  APIGW1 <--> MEDIA1
-  APIGW1 <--> MEDIAn
-  APIGW1 <--> NOTI1
-  APIGW1 <--> NOTIn
-  APIGW2 <--> AUTH1
-  APIGW2 <--> AUTHn
-  APIGW2 <--> POST1
-  APIGW2 <--> POSTn
-  APIGW2 <--> COMMENT1
-  APIGW2 <--> COMMENTn
-  APIGW2 <--> MEDIA1
-  APIGW2 <--> MEDIAn
-  APIGW2 <--> NOTI1
-  APIGW2 <--> NOTIn
-  APIGWn <--> AUTH1
-  APIGWn <--> AUTHn
-  APIGWn <--> POST1
-  APIGWn <--> POSTn
-  APIGWn <--> COMMENT1
-  APIGWn <--> COMMENTn
-  APIGWn <--> MEDIA1
-  APIGWn <--> MEDIAn
-  APIGWn <--> NOTI1
-  APIGWn <--> NOTIn
-
-  AUTH1 <--> DB
-  AUTHn <--> DB
-  POST1 <--> DB
-  POSTn <--> DB
-  COMMENT1 <--> DB
-  COMMENTn <--> DB
-  MEDIA1 <--> DB
-  MEDIAn <--> DB
-
-  NOTI1 <--> REDIS
-  NOTIn <--> REDIS
-  NOTI1 <--> MQ
-  NOTIn <--> MQ
-  POST1 <--> MQ
-  POSTn <--> MQ
-  COMMENT1 <--> MQ
-  COMMENTn <--> MQ
-
-  APIGW1 <--> REDIS
-  APIGW2 <--> REDIS
-  APIGWn <--> REDIS
-
-  AUTH1 <--> REDIS
-  AUTHn <--> REDIS
-  POST1 <--> REDIS
-  POSTn <--> REDIS
-  COMMENT1 <--> REDIS
-  COMMENTn <--> REDIS
-  MEDIA1 <--> REDIS
-  MEDIAn <--> REDIS
-
-  classDef ws fill:#f9f,stroke:#333,stroke-width:2px;
-  NOTI1:::ws
-  NOTIn:::ws
-  REDIS:::ws
-```
-
-### Ghi chú:
-- **Load Balancer**: Phân phối traffic, cần sticky session cho WebSocket hoặc dùng Redis adapter.
-- **API Gateway**: Có thể scale out nhiều instance, stateless.
-- **Notification Service**: Dùng Socket.IO, scale out cần Redis adapter để đồng bộ kết nối WebSocket.
-- **Redis**: Dùng cho cache, pub/sub, đồng bộ Socket.IO.
-- **Message Broker**: RabbitMQ dùng cho event-driven giữa các service.
-- **Database**: Dùng chung cho các service (có thể tách DB riêng nếu cần).
-
-Sơ đồ này thể hiện rõ các thành phần, các luồng kết nối, và giải pháp đồng bộ WebSocket khi scale out.
 # 🏗️ NewFeed Microservices Architecture
 
 A social media platform built with microservices architecture using Node.js, Express, GraphQL, Prisma, Redis, RabbitMQ, and Docker.
@@ -213,13 +108,12 @@ microservices/
 │   ├── prisma/schema.prisma
 │   └── Dockerfile
 │
-├── comment-service/          # Comments & SSE (Port 3004)
-│   ├── src/(Port 3004)
+├── comment-service/          # Comments & GraphQL Subscriptions (Port 3004)
 │   ├── src/
 │   │   ├── app.js
-│   │   ├── graphql/
+│   │   ├── graphql/          # Schema, resolvers, subscriptions
 │   │   ├── routes/
-│   │   └── services/         # Event listener & publishera
+│   │   └── services/         # Event listener & publisher
 │   └── Dockerfile
 │
 ├── media-service/            # Media Upload (Port 3003)
@@ -353,7 +247,7 @@ cd notification-service && npm run dev
 | API Gateway          | 8080  | http://localhost:8080     | Express, JWT         |
 | Auth Service         | 3001  | http://localhost:3001     | Express, Prisma      |
 | Post Service         | 3002  | http://localhost:3002     | Apollo GraphQL       |
-| Comment Service      | 3004  | http://localhost:3004     | GraphQL, RabbitMQ    |
+| Comment Service      | 3004  | http://localhost:3004     | GraphQL Subscriptions, WebSocket, RabbitMQ |
 | Media Service        | 3003  | http://localhost:3003     | Express, Cloudinary  |
 | Notification Service | 3005  | http://localhost:3005     | Socket.IO, RabbitMQ  |
 | PostgreSQL           | 5432  | postgres://localhost:5432 | 3 separate databases |
@@ -383,7 +277,8 @@ cd notification-service && npm run dev
 
 **💬 Comment Service (Port 3004)**
 - CRUD operations for comments
-- GraphQL API
+- GraphQL API with Subscriptions (real-time)
+- WebSocket for real-time comment updates
 - RabbitMQ event consumer (cascade delete)
 - Publish events to notification service
 
@@ -450,36 +345,45 @@ curl -X POST http://localhost:8080/api/media/upload/image \
   -F "image=@/path/to/photo.jpg"
 ```
 
-### 5. Real-time Comments (SSE)
+### 5. Real-time Comments (GraphQL Subscriptions)
 
-```javascript
-// Client-side JavaScript
-import { io } from "socket.io-client";
+```graphql
+subscription OnCommentAdded($postId: ID!) {
+  commentAdded(postId: $postId) {
+    id
+    content
+    author {
+      username
+      avatarUrl
+    }
+    createdAt
+  }
+}
+```
 
-const socket = io("http://localhost:3005", {
-  withCredentials: true,
+Ví dụ client (Apollo Client):
+
+```js
+import { WebSocketLink } from '@apollo/client/link/ws';
+import { ApolloClient, InMemoryCache, split } from '@apollo/client';
+import { getMainDefinition } from '@apollo/client/utilities';
+
+const wsLink = new WebSocketLink({
+  uri: 'ws://localhost:3004/graphql',
+  options: { reconnect: true }
 });
 
-// Subscribe to user notifications
-socket.emit("subscribe", userId);
-
-// Subscribe to specific post updates
-socket.emit("subscribe-post", postId);
-
-// Listen for notifications
-socket.on("notification", (data) => {
-  console.log("New notification:", data);
-  // data: { type, message, data, createdAt }
+const client = new ApolloClient({
+  link: wsLink,
+  cache: new InMemoryCache()
 });
 
-// Listen for new comments on subscribed posts
-socket.on("new_comment", (data) => {
-  console.log("New comment on post:", data);
-  // data: { postId, comment }
+client.subscribe({
+  query: gql`subscription OnCommentAdded($postId: ID!) { commentAdded(postId: $postId) { id content author { username } createdAt } }`,
+  variables: { postId: '...' }
+}).subscribe({
+  next({ data }) { console.log('New comment:', data); }
 });
-
-// Unsubscribe from post
-socket.emit("unsubscribe-post", postId);
 ```
 
 ---
@@ -650,14 +554,15 @@ query {
 - Response: `{ success, url, public_id }`
 - Max size: 50MB
 
-### Real-time Events (SSE)
 
-**GET /api/sse/comments/:postId**
-- Server-Sent Events stream for real-time comments
+### Real-time Events (GraphQL Subscriptions)
+
+**subscription commentAdded(postId: ID!): Comment**
+- Real-time comment stream via WebSocket (GraphQL Subscriptions)
 - Requires: Authentication
 - Events:
-  - `comment_added`: New comment on post
-  - `comment_deleted`: Comment removed
+  - `commentAdded`: New comment on post
+  - `commentDeleted`: Comment removed
 
 ### Notifications (Socket.IO)
 
@@ -712,11 +617,11 @@ socket.on("new_comment", (data) => {
 - `post.created`, `post.liked`, `post.deleted`
 - `like.created`
 
-### 3. Real-time (Redis Pub/Sub + SSE)
+### 3. Real-time (GraphQL Subscriptions + WebSocket)
 
-- **Comment Service** publishes events to Redis
-- All instances subscribe and broadcast via SSE
-- Horizontal scaling: Clients connect to any server
+- **Comment Service** sử dụng GraphQL Subscriptions qua WebSocket
+- Redis Pub/Sub để đồng bộ sự kiện giữa các instance
+- Client kết nối WebSocket tới bất kỳ instance nào đều nhận được sự kiện mới
 
 ### 4. Real-time (Socket.IO)
 
@@ -832,7 +737,7 @@ docker-compose up -d --scale api-gateway=3
 - Cloudinary
 
 **Real-time Communication:**
-- Server-Sent Events (SSE) - Comments
+- GraphQL Subscriptions (WebSocket) - Comments
 - Socket.IO - Notifications
 
 **DevOps:**
