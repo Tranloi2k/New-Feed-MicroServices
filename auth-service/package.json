@@ -1,0 +1,28 @@
+{
+  "name": "auth-service",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Authentication service for NewFeed",
+  "main": "src/app.js",
+  "scripts": {
+    "dev": "nodemon src/app.js",
+    "start": "node src/app.js",
+    "migrate": "prisma migrate dev",
+    "generate": "prisma generate"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cookie-parser": "^1.4.6",
+    "@prisma/client": "^7.1.0",
+    "@prisma/adapter-pg": "^7.1.0",
+    "ioredis": "^5.3.2"
+  },
+  "devDependencies": {
+    "prisma": "^7.1.0",
+    "nodemon": "^3.0.2"
+  }
+}

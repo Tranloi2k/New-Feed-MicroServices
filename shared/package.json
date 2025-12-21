@@ -1,0 +1,14 @@
+{
+  "name": "@newfeed/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Shared utilities for NewFeed microservices",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No tests yet\""
+  },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2",
+    "winston": "^3.11.0"
+  }
+}

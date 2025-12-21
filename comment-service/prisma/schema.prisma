@@ -1,0 +1,22 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Comment {
+  id               Int       @id @default(autoincrement())
+  postId           Int       @map("post_id")
+  userId           Int       @map("user_id")
+  content          String
+  parentCommentId  Int?      @map("parent_comment_id")
+  likeCount        Int       @default(0) @map("like_count")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([postId, createdAt])
+  @@index([parentCommentId])
+  @@map("comments")
+}

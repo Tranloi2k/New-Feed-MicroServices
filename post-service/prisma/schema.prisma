@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PostType {
+  text
+  image
+  video
+  link
+}
+
+model Post {
+  id           Int       @id @default(autoincrement())
+  userId       Int       @map("user_id")
+  content      String?
+  postType     PostType  @default(text) @map("post_type")
+  mediaUrls    Json?     @map("media_urls")
+  location     String?
+  isHidden     Boolean   @default(false) @map("is_hidden")
+  likeCount    Int       @default(0) @map("like_count")
+  commentCount Int       @default(0) @map("comment_count")
+  shareCount   Int       @default(0) @map("share_count")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("posts")
+}
