@@ -16,7 +16,7 @@ import { initEventListener } from "./services/eventListener.js";
 import { initEventPublisher } from "./services/eventPublisher.js";
 import { createRedisClient } from "./config/redis.js";
 import { closePubSub } from "./config/pubsub.js";
-
+import { authenToken } from './services/userService.js'
 const app = express();
 const httpServer = createServer(app);
 
@@ -50,17 +50,23 @@ const serverCleanup = useServer(
     schema,
     context: async (ctx) => {
       // Get user info from connection params (sent during connection)
-      const userId = ctx.connectionParams?.["x-user-id"];
-      const userEmail = ctx.connectionParams?.["x-user-email"];
-
-      return {
-        user: userId
-          ? {
-            userId: parseInt(userId),
-            email: userEmail,
-          }
-          : null,
-      };
+      const token = ctx.connectionParams?.accessToken;
+      if (token) {
+        try {
+          const { user } = await authenToken(token);
+          return {
+            user: user.userId
+              ? {
+                userId: parseInt(user.userId),
+                email: user.email,
+              }
+              : null,
+          };
+        } catch (error) {
+          console.log("Invalid token in GraphQL context");
+        }
+      }
+      return {}
     },
     onConnect: async (ctx) => {
       console.log("🔌 [WebSocket] Client connected");
@@ -101,17 +107,28 @@ async function startServer() {
     expressMiddleware(apolloServer, {
       context: async ({ req }) => {
         // User info from API Gateway headers
-        const userId = req.headers["x-user-id"];
-        const userEmail = req.headers["x-user-email"];
+        console.log(req.cookies)
+        const token =
+          req.cookies?.access_token ||
+          (req.headers["authorization"] &&
+            req.headers["authorization"].split(" ")[1]);
 
-        return {
-          user: userId
-            ? {
-              userId: parseInt(userId),
-              email: userEmail,
-            }
-            : null,
-        };
+        if (token) {
+          try {
+            const { user } = await authenToken(token);
+            return {
+              user: user.userId
+                ? {
+                  userId: parseInt(user.userId),
+                  email: user.email,
+                }
+                : null,
+            };
+          } catch (error) {
+            console.log("Invalid token in GraphQL context");
+          }
+        }
+        return {}
       },
     })
   );
@@ -134,7 +151,7 @@ async function startServer() {
     });
   });
 
-  const PORT = process.env.PORT || 3004;
+  const PORT = process.env.PORT;
   httpServer.listen(PORT, () => {
     // Initialize event systems
     initEventListener();

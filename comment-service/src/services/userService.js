@@ -26,3 +26,24 @@ export async function getUserById(userId) {
     };
   }
 }
+
+export async function authenToken(token) {
+  try {
+    const response = await axios.post(`${AUTH_SERVICE_URL}/api/validate-token`,
+      { token },
+      {
+        headers: {
+          "X-Service-Token": process.env.SERVICE_SECRET,
+          'Content-Type': 'application/json',
+        },
+      });
+    if (response.status === 200) {
+      const { user } = response.data;
+      return { valid: true, user };
+    }
+
+    return { valid: false, error: 'Invalid token' };
+  } catch (error) {
+    return { valid: false, error: error.message };
+  }
+}

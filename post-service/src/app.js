@@ -71,7 +71,7 @@ async function startServer() {
     });
   });
 
-  const PORT = process.env.PORT || 3002;
+  const PORT = process.env.PORT;
   app.listen(PORT, () => {
     console.log(`📝 Post Service running on port ${PORT}`);
     console.log(

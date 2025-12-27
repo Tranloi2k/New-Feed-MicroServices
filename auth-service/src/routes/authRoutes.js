@@ -5,6 +5,7 @@ import {
   logout,
   getCurrentUser,
   getUserById,
+  validateToken
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -13,6 +14,7 @@ const router = express.Router();
 router.post("/signup", signup);
 router.post("/login", login);
 router.post("/logout", logout);
+router.post("/validate-token", validateToken)
 
 // Protected routes (called from API Gateway with user info in headers)
 router.get("/me", getCurrentUser);

@@ -189,6 +189,43 @@ export function logout(req, res) {
   });
 }
 
+export function validateToken(req, res) {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Không tìm thấy token xác thực",
+      });
+    }
+
+    // Xác thực token
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+      if (err) {
+        // Xóa token không hợp lệ khỏi sessions
+        return res.status(403).json({
+          success: false,
+          message: "Token không hợp lệ",
+        });
+      }
+
+      req.user = user;
+      req.token = token;
+      res.status(200).json({
+        success: true,
+        user
+      });
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi xác thực",
+      error: error.message,
+    });
+  }
+}
+
 // Get current user
 export async function getCurrentUser(req, res) {
   try {

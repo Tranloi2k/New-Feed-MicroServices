@@ -6,7 +6,7 @@ let channel = null;
 export async function initEventListener() {
   try {
     const connection = await amqp.connect(
-      process.env.RABBITMQ_URL || "amqp://admin:admin@localhost:5672"
+      process.env.RABBITMQ_URL
     );
     channel = await connection.createChannel();
     await channel.assertExchange("posts", "topic", { durable: true });

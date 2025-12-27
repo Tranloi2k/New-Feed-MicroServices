@@ -5,10 +5,10 @@ let channel = null;
 export async function initEventListener(io) {
   try {
     const connection = await amqp.connect(
-      process.env.RABBITMQ_URL || "amqp://admin:admin@localhost:5672"
+      process.env.RABBITMQ_URL
     );
     channel = await connection.createChannel();
-    
+
     // Create exchanges for different event types
     await channel.assertExchange("comments", "topic", { durable: true });
     await channel.assertExchange("posts", "topic", { durable: true });
@@ -24,7 +24,7 @@ export async function initEventListener(io) {
     // Subscribe to post events
     channel.bindQueue(q.queue, "posts", "post.created");
     channel.bindQueue(q.queue, "posts", "post.liked");
-    
+
     // Subscribe to like events
     channel.bindQueue(q.queue, "likes", "like.created");
 
@@ -81,7 +81,7 @@ async function handleEvent(io, event) {
 
 function handleCommentCreated(io, data) {
   const { comment, postId, postAuthorId } = data;
-  
+
   // Notify post author about new comment
   if (postAuthorId && comment.authorId !== postAuthorId) {
     io.to(`user:${postAuthorId}`).emit("notification", {
@@ -103,7 +103,7 @@ function handleCommentCreated(io, data) {
 
 function handleCommentUpdated(io, data) {
   const { comment, postId } = data;
-  
+
   // Send update to all users watching this post
   io.to(`post:${postId}`).emit("comment_updated", {
     postId,
@@ -115,7 +115,7 @@ function handleCommentUpdated(io, data) {
 
 function handleCommentDeleted(io, data) {
   const { commentId, postId } = data;
-  
+
   // Send deletion to all users watching this post
   io.to(`post:${postId}`).emit("comment_deleted", {
     postId,
@@ -127,7 +127,7 @@ function handleCommentDeleted(io, data) {
 
 function handlePostCreated(io, data) {
   const { post, followers } = data;
-  
+
   // Notify followers about new post
   if (followers && followers.length > 0) {
     followers.forEach((followerId) => {
@@ -145,7 +145,7 @@ function handlePostCreated(io, data) {
 
 function handlePostLiked(io, data) {
   const { postId, postAuthorId, likedBy, likedByName } = data;
-  
+
   // Notify post author about like
   if (postAuthorId && likedBy !== postAuthorId) {
     io.to(`user:${postAuthorId}`).emit("notification", {
@@ -161,7 +161,7 @@ function handlePostLiked(io, data) {
 
 function handleLikeCreated(io, data) {
   const { commentId, commentAuthorId, likedBy, likedByName } = data;
-  
+
   // Notify comment author about like
   if (commentAuthorId && likedBy !== commentAuthorId) {
     io.to(`user:${commentAuthorId}`).emit("notification", {

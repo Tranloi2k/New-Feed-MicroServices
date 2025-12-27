@@ -5,12 +5,12 @@ let channel = null;
 export async function initEventPublisher() {
   try {
     const connection = await amqp.connect(
-      process.env.RABBITMQ_URL || "amqp://admin:admin@localhost:5672"
+      process.env.RABBITMQ_URL
     );
     channel = await connection.createChannel();
-    
+
     await channel.assertExchange("comments", "topic", { durable: true });
-    
+
     console.log("✅ RabbitMQ event publisher initialized");
   } catch (error) {
     console.error("❌ RabbitMQ publisher failed:", error.message);

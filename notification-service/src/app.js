@@ -77,7 +77,7 @@ app.get("/health", (req, res) => {
 // Initialize RabbitMQ event listener
 initEventListener(io);
 
-const PORT = process.env.PORT || 3005;
+const PORT = process.env.PORT;
 httpServer.listen(PORT, () => {
   console.log(`Notification service running on port ${PORT}`);
   console.log(`Socket.IO ready for connections`);
