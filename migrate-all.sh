@@ -40,14 +40,14 @@ else
 fi
 cd ..
 
-# Media Service
-echo -e "\n📦 Media Service - Running migrations..."
-cd media-service
+# Notification Service
+echo -e "\n📦 Notification Service - Running migrations..."
+cd notification-service
 if [ -f .env ]; then
   npx prisma migrate dev --name init
-  echo -e "${GREEN}✅ Media Service migrations completed${NC}"
+  echo -e "${GREEN}✅ Notification Service migrations completed${NC}"
 else
-  echo -e "${RED}❌ .env file not found in media-service${NC}"
+  echo -e "${RED}❌ .env file not found in notification-service${NC}"
 fi
 cd ..
 

@@ -6,7 +6,25 @@ import { expressMiddleware } from "@apollo/server/express4";
 import bodyParser from "body-parser";
 import typeDefs from "./graphql/schema.js";
 import resolvers from "./graphql/resolvers.js";
+import { createUserLoader } from "./graphql/loaders/userLoader.js";
 import { createRedisClient } from "./config/redis.js";
+
+function buildContext(req) {
+  const userId = req.headers["x-user-id"];
+  const userEmail = req.headers["x-user-email"];
+
+  return {
+    user: userId
+      ? {
+          userId: parseInt(userId, 10),
+          email: userEmail,
+        }
+      : null,
+    loaders: {
+      user: createUserLoader(),
+    },
+  };
+}
 
 const app = express();
 
@@ -36,20 +54,7 @@ async function startServer() {
     "/graphql",
     bodyParser.json(),
     expressMiddleware(apolloServer, {
-      context: async ({ req }) => {
-        // User info from API Gateway headers
-        const userId = req.headers["x-user-id"];
-        const userEmail = req.headers["x-user-email"];
-
-        return {
-          user: userId
-            ? {
-              userId: parseInt(userId),
-              email: userEmail,
-            }
-            : null,
-        };
-      },
+      context: async ({ req }) => buildContext(req),
     })
   );
 

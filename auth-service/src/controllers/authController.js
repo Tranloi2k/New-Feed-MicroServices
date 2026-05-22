@@ -7,16 +7,29 @@ import {
   cacheUserExists,
   invalidateUserExists,
 } from "../services/cacheService.js";
+import {
+  isValidUsername,
+  normalizeUsernameInput,
+} from "../utils/username.js";
 
 // Signup
 export async function signup(req, res) {
   try {
-    const { username, email, password, fullName } = req.body;
+    let { username, email, password, fullName } = req.body;
+    username = normalizeUsernameInput(username);
 
     if (!username || !email || !password) {
       return res.status(400).json({
         success: false,
         message: "Username, email and password are required",
+      });
+    }
+
+    if (!isValidUsername(username)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Username must be 3–30 characters: letters, numbers, underscore only",
       });
     }
 
@@ -226,10 +239,18 @@ export function validateToken(req, res) {
   }
 }
 
-// Get current user
+// Get current user (identity from API Gateway JWT → X-User-Id)
 export async function getCurrentUser(req, res) {
   try {
-    const userId = parseInt(req.headers["x-user-id"]);
+    const userIdHeader = req.headers["x-user-id"];
+    if (!userIdHeader) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    const userId = parseInt(userIdHeader, 10);
 
     // Import cache functions at top of this function
     const { getCachedUser, cacheUser: cacheSingleUser } = await import("../services/cacheService.js");

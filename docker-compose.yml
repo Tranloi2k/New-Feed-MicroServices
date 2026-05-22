@@ -116,10 +116,26 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3005
+      - DATABASE_URL=postgresql://postgres:postgres@postgres-notification:5432/notification_db
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET}
       - CLIENT_URL=http://localhost:3000
     depends_on:
+      - postgres-notification
       - rabbitmq
+    networks:
+      - microservices-network
+
+  postgres-notification:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
     networks:
       - microservices-network
 
@@ -196,5 +212,6 @@ volumes:
   auth-db-data:
   post-db-data:
   comment-db-data:
+  notification-db-data:
   redis-data:
   rabbitmq-data:

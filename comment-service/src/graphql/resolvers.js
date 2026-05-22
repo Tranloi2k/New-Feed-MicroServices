@@ -1,21 +1,38 @@
 import prisma from "../lib/prisma.js";
-import { getUserById } from "../services/userService.js";
 import { publishEvent } from "../services/eventPublisher.js";
 import cacheService from "../services/cacheService.js";
 import pubsub, { COMMENT_EVENTS } from "../config/pubsub.js";
 import { withFilter } from "graphql-subscriptions";
 
+function formatComment(comment) {
+  return {
+    ...comment,
+    createdAt: comment.createdAt.toISOString(),
+    updatedAt: comment.updatedAt.toISOString(),
+  };
+}
+
 const resolvers = {
+  Comment: {
+    user: (comment, _, context) => {
+      if (!comment?.userId) return null;
+      return context.loaders.user.load(comment.userId);
+    },
+    replies: (comment) => comment.replies ?? [],
+  },
+
   Query: {
     getComments: async (_, { postId, limit = 20, cursor }) => {
       try {
-        // Try cache first
-        const cached = await cacheService.getCachedCommentsList(postId, limit, cursor);
+        const cached = await cacheService.getCachedCommentsList(
+          postId,
+          limit,
+          cursor
+        );
         if (cached) {
           return cached;
         }
 
-        // Cache miss - query database
         const comments = await prisma.comment.findMany({
           where: {
             postId,
@@ -32,51 +49,29 @@ const resolvers = {
         const hasMore = comments.length > limit;
         const commentsToReturn = hasMore ? comments.slice(0, -1) : comments;
 
-        // Fetch user data and replies for each comment
-        const commentsWithData = await Promise.all(
+        const commentsWithReplies = await Promise.all(
           commentsToReturn.map(async (comment) => {
-            const user = await getUserById(comment.userId);
-
-            // Fetch replies
             const replies = await prisma.comment.findMany({
               where: { parentCommentId: comment.id },
               orderBy: { createdAt: "asc" },
             });
 
-            const repliesWithUsers = await Promise.all(
-              replies.map(async (reply) => {
-                const replyUser = await getUserById(reply.userId);
-                return {
-                  ...reply,
-                  user: replyUser,
-                  createdAt: reply.createdAt.toISOString(),
-                  updatedAt: reply.updatedAt.toISOString(),
-                  replies: [],
-                };
-              })
-            );
-
             return {
-              ...comment,
-              user,
-              createdAt: comment.createdAt.toISOString(),
-              updatedAt: comment.updatedAt.toISOString(),
-              replies: repliesWithUsers,
+              ...formatComment(comment),
+              replies: replies.map(formatComment),
             };
           })
         );
 
         const result = {
-          comments: commentsWithData,
+          comments: commentsWithReplies,
           hasMore,
           nextCursor: hasMore
             ? commentsToReturn[commentsToReturn.length - 1].id
             : null,
         };
 
-        // Cache the result for future requests
         await cacheService.cacheCommentsList(postId, limit, cursor, result);
-
         return result;
       } catch (error) {
         console.error("Error fetching comments:", error);
@@ -111,47 +106,38 @@ const resolvers = {
           },
         });
 
-        const user = await getUserById(comment.userId);
-
-        // Invalidate comments cache for this post
         await cacheService.invalidatePostComments(postId);
 
-        // If this is a reply, also invalidate the parent comment cache
         if (parentCommentId) {
           await cacheService.invalidateSingleComment(parentCommentId);
         }
 
-        const commentWithUser = {
-          ...comment,
-          user,
-          createdAt: comment.createdAt.toISOString(),
-          updatedAt: comment.updatedAt.toISOString(),
+        const commentPayload = {
+          ...formatComment(comment),
           replies: [],
         };
 
-        // Publish to RabbitMQ for notification service
         await publishEvent("comment.created", {
           comment: {
             ...comment,
             authorId: comment.userId,
-            authorName: user?.username || user?.name || "Unknown",
+            authorName: context.user.email,
             createdAt: comment.createdAt.toISOString(),
             updatedAt: comment.updatedAt.toISOString(),
           },
           postId,
-          postAuthorId: null, // TODO: Fetch from post service
+          postAuthorId: null,
         });
 
-        // 🔥 Publish to GraphQL Subscription
         await pubsub.publish(COMMENT_EVENTS.COMMENT_ADDED, {
-          commentAdded: commentWithUser,
+          commentAdded: commentPayload,
           postId,
         });
 
         return {
           success: true,
           message: "Comment created successfully",
-          comment: commentWithUser,
+          comment: commentPayload,
         };
       } catch (error) {
         console.error("Error creating comment:", error);
@@ -189,7 +175,6 @@ const resolvers = {
           };
         }
 
-        // Delete replies first
         const repliesToDelete = await prisma.comment.findMany({
           where: { parentCommentId: id },
           select: { id: true },
@@ -199,25 +184,23 @@ const resolvers = {
           where: { parentCommentId: id },
         });
 
-        // Delete the comment
         await prisma.comment.delete({
           where: { id },
         });
 
-        // Invalidate caches
         await cacheService.invalidatePostComments(comment.postId);
         await cacheService.invalidateSingleComment(id);
         if (repliesToDelete.length > 0) {
-          await cacheService.invalidateReplies(repliesToDelete.map(r => r.id));
+          await cacheService.invalidateReplies(
+            repliesToDelete.map((r) => r.id)
+          );
         }
 
-        // Publish to RabbitMQ for notification service
         await publishEvent("comment.deleted", {
           commentId: id,
           postId: comment.postId,
         });
 
-        // 🔥 Publish to GraphQL Subscription
         await pubsub.publish(COMMENT_EVENTS.COMMENT_DELETED, {
           commentDeleted: id,
           postId: comment.postId,
@@ -241,31 +224,23 @@ const resolvers = {
 
   Subscription: {
     commentAdded: {
-      // Filter: Only send to clients subscribed to this specific postId
       subscribe: withFilter(
         () => pubsub.asyncIterator([COMMENT_EVENTS.COMMENT_ADDED]),
-        (payload, variables) => {
-          // Only send to clients watching this post
-          return payload.postId === variables.postId;
-        }
+        (payload, variables) => payload.postId === variables.postId
       ),
     },
 
     commentUpdated: {
       subscribe: withFilter(
         () => pubsub.asyncIterator([COMMENT_EVENTS.COMMENT_UPDATED]),
-        (payload, variables) => {
-          return payload.postId === variables.postId;
-        }
+        (payload, variables) => payload.postId === variables.postId
       ),
     },
 
     commentDeleted: {
       subscribe: withFilter(
         () => pubsub.asyncIterator([COMMENT_EVENTS.COMMENT_DELETED]),
-        (payload, variables) => {
-          return payload.postId === variables.postId;
-        }
+        (payload, variables) => payload.postId === variables.postId
       ),
     },
   },

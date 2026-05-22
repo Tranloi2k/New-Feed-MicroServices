@@ -5,26 +5,38 @@ import Redis from 'ioredis';
 // Uses separate Redis connections for publisher and subscriber
 // Production-ready: Scales across multiple service instances
 
-const redisOptions = {
-    host: process.env.REDIS_HOST,
-    port: parseInt(process.env.REDIS_PORT),
-    password: process.env.REDIS_PASSWORD,
+const redisCommonOptions = {
     retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
         console.log(`[Redis PubSub] Retry attempt ${times}, waiting ${delay}ms`);
         return delay;
     },
-    maxRetriesPerRequest: null, // Important for PubSub - don't limit retries
+    maxRetriesPerRequest: null,
     enableReadyCheck: true,
     enableOfflineQueue: true,
-    // Use DB 2 for subscriptions (separate from cache DB 1)
     db: 2,
 };
+
+const redisUrl =
+    process.env.REDIS_URL ||
+    `redis://${process.env.REDIS_HOST || "localhost"}:${process.env.REDIS_PORT || "6379"}`;
+
+function createPubSubRedisClient() {
+    if (process.env.REDIS_URL) {
+        return new Redis(process.env.REDIS_URL, redisCommonOptions);
+    }
+    return new Redis({
+        host: process.env.REDIS_HOST || "localhost",
+        port: parseInt(process.env.REDIS_PORT || "6379", 10),
+        password: process.env.REDIS_PASSWORD || undefined,
+        ...redisCommonOptions,
+    });
+}
 
 // Connection event handlers
 const handleConnection = (type, redis) => {
     redis.on('connect', () => {
-        console.log(`✅ [Redis PubSub ${type}] Connected to ${redisOptions.host}:${redisOptions.port}`);
+        console.log(`✅ [Redis PubSub ${type}] Connected (${redisUrl})`);
     });
 
     redis.on('ready', () => {
@@ -40,9 +52,8 @@ const handleConnection = (type, redis) => {
     });
 };
 
-// Create separate Redis connections for publisher and subscriber
-const publisher = new Redis(redisOptions);
-const subscriber = new Redis(redisOptions);
+const publisher = createPubSubRedisClient();
+const subscriber = createPubSubRedisClient();
 
 // Attach event handlers
 handleConnection('Publisher', publisher);

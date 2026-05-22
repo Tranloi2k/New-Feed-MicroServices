@@ -45,6 +45,8 @@ const typeDefs = gql`
 
   type Query {
     getNewsFeed(limit: Int, cursor: Int): NewsFeedResponse!
+    getUserPosts(userId: Int!, limit: Int, cursor: Int): NewsFeedResponse!
+    getFollowingFeed(limit: Int, cursor: Int): NewsFeedResponse!
     getPost(id: Int!): Post
   }
 

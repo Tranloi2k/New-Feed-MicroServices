@@ -1,20 +1,69 @@
 import prisma from "../lib/prisma.js";
-import { getUserById } from "../services/userService.js";
 import { publishEvent } from "../services/eventPublisher.js";
+import { getFollowingIds } from "../services/userService.js";
 import cacheService from "../services/cacheService.js";
 
+async function paginatePosts(where, limit = 10, cursor) {
+  const posts = await prisma.post.findMany({
+    where: { ...where, isHidden: false },
+    take: limit + 1,
+    ...(cursor && {
+      cursor: { id: cursor },
+      skip: 1,
+    }),
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+
+  const hasMore = posts.length > limit;
+  const postsToReturn = hasMore ? posts.slice(0, -1) : posts;
+
+  return {
+    posts: postsToReturn.map(formatPost),
+    hasMore,
+    nextCursor: hasMore ? postsToReturn[postsToReturn.length - 1].id : null,
+  };
+}
+
+function formatPost(post) {
+  let mediaUrls = [];
+  if (post.mediaUrls != null) {
+    try {
+      const parsed =
+        typeof post.mediaUrls === "string"
+          ? JSON.parse(post.mediaUrls)
+          : post.mediaUrls;
+      mediaUrls = Array.isArray(parsed)
+        ? parsed.filter((u) => typeof u === "string" && u.length > 0)
+        : [];
+    } catch {
+      mediaUrls = [];
+    }
+  }
+
+  return {
+    ...post,
+    postType: post.postType.toUpperCase(),
+    mediaUrls,
+    createdAt: post.createdAt.toISOString(),
+    updatedAt: post.updatedAt.toISOString(),
+  };
+}
+
 const resolvers = {
+  Post: {
+    user: (post, _, context) => {
+      if (!post?.userId) return null;
+      return context.loaders.user.load(post.userId);
+    },
+  },
+
   Query: {
-    getNewsFeed: async (_, { limit = 10, cursor }, context) => {
+    getNewsFeed: async (_, { limit = 10, cursor }) => {
       try {
-        // Try cache first
         const cached = await cacheService.getCachedNewsFeed(limit, cursor);
         if (cached) {
-          console.log(`✅ Cache HIT for newsfeed:${limit}:${cursor || 'first'}`);
           return cached;
         }
-
-        console.log(`⚠️ Cache MISS for newsfeed:${limit}:${cursor || 'first'}`);
 
         const posts = await prisma.post.findMany({
           where: { isHidden: false },
@@ -29,34 +78,15 @@ const resolvers = {
         const hasMore = posts.length > limit;
         const postsToReturn = hasMore ? posts.slice(0, -1) : posts;
 
-        // Fetch user data for each post
-        const postsWithUsers = await Promise.all(
-          postsToReturn.map(async (post) => {
-            const user = await getUserById(post.userId);
-            return {
-              ...post,
-              postType: post.postType.toUpperCase(),
-              mediaUrls: post.mediaUrls
-                ? JSON.parse(JSON.stringify(post.mediaUrls))
-                : [],
-              createdAt: post.createdAt.toISOString(),
-              updatedAt: post.updatedAt.toISOString(),
-              user,
-            };
-          })
-        );
-
         const result = {
-          posts: postsWithUsers,
+          posts: postsToReturn.map(formatPost),
           hasMore,
           nextCursor: hasMore
             ? postsToReturn[postsToReturn.length - 1].id
             : null,
         };
 
-        // Cache the result (2 minutes TTL)
         await cacheService.cacheNewsFeed(limit, cursor, result);
-
         return result;
       } catch (error) {
         console.error("Error fetching news feed:", error);
@@ -64,16 +94,41 @@ const resolvers = {
       }
     },
 
-    getPost: async (_, { id }) => {
+    getUserPosts: async (_, { userId, limit = 10, cursor }) => {
       try {
-        // Try cache first
-        const cached = await cacheService.getCachedPost(id);
-        if (cached) {
-          console.log(`✅ Cache HIT for post:${id}`);
-          return cached;
+        return await paginatePosts({ userId }, limit, cursor);
+      } catch (error) {
+        console.error("Error fetching user posts:", error);
+        throw new Error("Failed to fetch user posts");
+      }
+    },
+
+    getFollowingFeed: async (_, { limit = 10, cursor }, context) => {
+      if (!context.user) {
+        throw new Error("Unauthorized. Please login first.");
+      }
+
+      try {
+        const followingIds = await getFollowingIds(context.user.userId);
+        const authorIds = [...new Set([context.user.userId, ...followingIds])];
+
+        if (authorIds.length === 0) {
+          return { posts: [], hasMore: false, nextCursor: null };
         }
 
-        console.log(`⚠️ Cache MISS for post:${id}`);
+        return await paginatePosts({ userId: { in: authorIds } }, limit, cursor);
+      } catch (error) {
+        console.error("Error fetching following feed:", error);
+        throw new Error("Failed to fetch following feed");
+      }
+    },
+
+    getPost: async (_, { id }) => {
+      try {
+        const cached = await cacheService.getCachedPost(id);
+        if (cached) {
+          return cached;
+        }
 
         const post = await prisma.post.findUnique({
           where: { id },
@@ -83,22 +138,8 @@ const resolvers = {
           throw new Error("Post not found");
         }
 
-        const user = await getUserById(post.userId);
-
-        const result = {
-          ...post,
-          postType: post.postType.toUpperCase(),
-          mediaUrls: post.mediaUrls
-            ? JSON.parse(JSON.stringify(post.mediaUrls))
-            : [],
-          createdAt: post.createdAt.toISOString(),
-          updatedAt: post.updatedAt.toISOString(),
-          user,
-        };
-
-        // Cache the result (15 minutes TTL)
+        const result = formatPost(post);
         await cacheService.cachePost(id, result);
-
         return result;
       } catch (error) {
         console.error("Error fetching post:", error);
@@ -115,7 +156,6 @@ const resolvers = {
 
       const { content, postType, mediaUrls, location } = input;
 
-      // Validate
       if (!postType) {
         return {
           success: false,
@@ -146,31 +186,18 @@ const resolvers = {
           },
         });
 
-        // Publish event
         await publishEvent("post.created", {
           postId: post.id,
           userId: post.userId,
           timestamp: new Date().toISOString(),
         });
 
-        // Invalidate news feed caches (new post affects all feeds)
         await cacheService.invalidateAllNewsFeeds();
-
-        const user = await getUserById(post.userId);
 
         return {
           success: true,
           message: "Post created successfully",
-          post: {
-            ...post,
-            postType: post.postType.toUpperCase(),
-            mediaUrls: post.mediaUrls
-              ? JSON.parse(JSON.stringify(post.mediaUrls))
-              : [],
-            createdAt: post.createdAt.toISOString(),
-            updatedAt: post.updatedAt.toISOString(),
-            user,
-          },
+          post: formatPost(post),
         };
       } catch (error) {
         console.error("Error creating post:", error);
@@ -212,10 +239,8 @@ const resolvers = {
           where: { id },
         });
 
-        // Invalidate caches
         await cacheService.invalidatePost(id);
 
-        // Publish event
         await publishEvent("post.deleted", {
           postId: id,
           userId: post.userId,

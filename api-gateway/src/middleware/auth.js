@@ -33,3 +33,18 @@ export function authenticateToken(req, res, next) {
   req.user = user;
   next();
 }
+
+/** Sets req.user when token is valid; does not block unauthenticated requests */
+export function optionalAuthenticateToken(req, res, next) {
+  const token =
+    req.cookies.access_token ||
+    req.headers.authorization?.replace(/^Bearer\s+/i, "");
+
+  if (token) {
+    const user = verifyToken(token);
+    if (user) {
+      req.user = user;
+    }
+  }
+  next();
+}

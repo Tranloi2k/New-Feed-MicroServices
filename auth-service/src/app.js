@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 import { createRedisClient } from "./config/redis.js";
 
 const app = express();
@@ -22,6 +23,7 @@ app.use(cookieParser());
 
 // Routes
 app.use("/api", authRoutes);
+app.use("/api/users", userRoutes);
 
 // Health check
 app.get("/health", (req, res) => {

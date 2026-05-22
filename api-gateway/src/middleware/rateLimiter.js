@@ -20,8 +20,14 @@ import { logger } from "../utils/logger.js";
  * - No memory issues (Redis handles storage)
  */
 
+const HEALTH_PATHS = new Set(["/health", "/health/circuit-breakers"]);
+
 export function createRateLimiter() {
   return async (req, res, next) => {
+    if (HEALTH_PATHS.has(req.path)) {
+      return next();
+    }
+
     try {
       const redis = getRedisClient();
 
@@ -50,8 +56,10 @@ export function createRateLimiter() {
       // 2. Count current requests in window
       pipeline.zcard(key);
 
+      const requestMember = `${now}-${Math.random()}`;
+
       // 3. Add current request timestamp
-      pipeline.zadd(key, now, `${now}-${Math.random()}`);
+      pipeline.zadd(key, now, requestMember);
 
       // 4. Set key expiration (cleanup)
       pipeline.expire(key, Math.ceil(windowMs / 1000));
@@ -74,7 +82,7 @@ export function createRateLimiter() {
         }
 
         // Remove the request we just added (since we're rejecting it)
-        await redis.zrem(key, `${now}-${Math.random()}`);
+        await redis.zrem(key, requestMember);
 
         // Set rate limit headers
         res.set({

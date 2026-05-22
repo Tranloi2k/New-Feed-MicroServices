@@ -6,16 +6,24 @@
   "main": "src/app.js",
   "scripts": {
     "dev": "nodemon src/app.js",
-    "start": "node src/app.js"
+    "start": "node src/app.js",
+    "migrate": "prisma migrate dev",
+    "generate": "prisma generate"
   },
   "dependencies": {
-    "express": "^4.18.2",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.1.0",
+    "amqplib": "^0.10.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "socket.io": "^4.6.1",
-    "amqplib": "^0.10.3"
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.21.0",
+    "socket.io": "^4.6.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "prisma": "^7.1.0"
   }
 }

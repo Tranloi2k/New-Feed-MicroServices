@@ -11,6 +11,24 @@ import { makeExecutableSchema } from "@graphql-tools/schema";
 import bodyParser from "body-parser";
 import typeDefs from "./graphql/schema.js";
 import resolvers from "./graphql/resolvers.js";
+import { createUserLoader } from "./graphql/loaders/userLoader.js";
+
+function buildContextFromHeaders(headers = {}) {
+  const userId = headers["x-user-id"];
+  const userEmail = headers["x-user-email"];
+
+  return {
+    user: userId
+      ? {
+          userId: parseInt(userId, 10),
+          email: userEmail,
+        }
+      : null,
+    loaders: {
+      user: createUserLoader(),
+    },
+  };
+}
 import commentRoutes from "./routes/commentRoutes.js";
 import { initEventListener } from "./services/eventListener.js";
 import { initEventPublisher } from "./services/eventPublisher.js";
@@ -49,24 +67,32 @@ const serverCleanup = useServer(
   {
     schema,
     context: async (ctx) => {
-      // Get user info from connection params (sent during connection)
+      const req = ctx.extra?.request;
+      if (req?.headers?.["x-user-id"]) {
+        return buildContextFromHeaders(req.headers);
+      }
+
       const token = ctx.connectionParams?.accessToken;
       if (token) {
         try {
           const { user } = await authenToken(token);
-          return {
-            user: user.userId
-              ? {
-                userId: parseInt(user.userId),
+          if (user?.userId) {
+            return {
+              user: {
+                userId: parseInt(user.userId, 10),
                 email: user.email,
-              }
-              : null,
-          };
-        } catch (error) {
-          console.log("Invalid token in GraphQL context");
+              },
+              loaders: {
+                user: createUserLoader(),
+              },
+            };
+          }
+        } catch {
+          console.log("Invalid token in GraphQL WS context");
         }
       }
-      return {}
+
+      return { loaders: { user: createUserLoader() } };
     },
     onConnect: async (ctx) => {
       console.log("🔌 [WebSocket] Client connected");
@@ -106,29 +132,35 @@ async function startServer() {
     bodyParser.json(),
     expressMiddleware(apolloServer, {
       context: async ({ req }) => {
-        // User info from API Gateway headers
-        console.log(req.cookies)
+        if (req.headers["x-user-id"]) {
+          return buildContextFromHeaders(req.headers);
+        }
+
         const token =
           req.cookies?.access_token ||
-          (req.headers["authorization"] &&
-            req.headers["authorization"].split(" ")[1]);
+          (req.headers.authorization &&
+            req.headers.authorization.split(" ")[1]);
 
         if (token) {
           try {
             const { user } = await authenToken(token);
-            return {
-              user: user.userId
-                ? {
-                  userId: parseInt(user.userId),
+            if (user?.userId) {
+              return {
+                user: {
+                  userId: parseInt(user.userId, 10),
                   email: user.email,
-                }
-                : null,
-            };
-          } catch (error) {
+                },
+                loaders: {
+                  user: createUserLoader(),
+                },
+              };
+            }
+          } catch {
             console.log("Invalid token in GraphQL context");
           }
         }
-        return {}
+
+        return { loaders: { user: createUserLoader() } };
       },
     })
   );
