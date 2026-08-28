@@ -1,4 +1,4 @@
-name: Build and Update Manifests
+name: Build and Update Config Repo
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
 
 env:
   IMAGE_PREFIX: ghcr.io/tranloi2k/new-feed-microservices
+  CONFIG_REPO: Tranloi2k/New-Feed-MicroServices-config
 
 jobs:
   build-and-push:
@@ -51,15 +52,15 @@ jobs:
   update-manifests:
     needs: build-and-push
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout
+      - name: Checkout config repo
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ env.CONFIG_REPO }}
+          token: ${{ secrets.CONFIG_REPO_TOKEN }}
+          ref: main
 
-      - name: Update image tags in manifests
+      - name: Update image tags
         run: |
           set -e
           for svc in api-gateway auth-service post-service comment-service media-service notification-service; do
@@ -78,6 +79,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No manifest changes to commit"
           else
-            git commit -m "chore: update image tags to ${{ github.sha }} [skip ci]"
+            git commit -m "chore: update image tags to ${{ github.sha }}"
             git push
           fi
