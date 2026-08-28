@@ -38,6 +38,12 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - name: Debug secrets
+        run: |
+          echo "Host is set: ${{ secrets.VPS_HOST != '' }}"
+          echo "Port is set: ${{ secrets.VPS_PORT != '' }}"
+          echo "User is set: ${{ secrets.VPS_USER != '' }}"
+          echo "Key is set: ${{ secrets.VPS_SSH_KEY != '' }}"
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
