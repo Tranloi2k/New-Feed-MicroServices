@@ -9,7 +9,7 @@ datasource db {
 model User {
   id           Int      @id @default(autoincrement())
   username     String   @unique
-  email        String   @unique
+  email        String   @unique @db.Citext
   passwordHash String   @map("password_hash")
   fullName     String?  @map("full_name")
   avatarUrl    String?  @map("avatar_url")
@@ -20,8 +20,27 @@ model User {
 
   followers Follow[] @relation("UserFollowers")
   following Follow[] @relation("UserFollowing")
+  refreshTokens RefreshToken[]
+  sentFollowRequests FollowRequest[] @relation("FollowRequestSender")
+  receivedFollowRequests FollowRequest[] @relation("FollowRequestRecipient")
 
   @@map("users")
+}
+
+model RefreshToken {
+  id           String    @id @default(uuid())
+  userId       Int       @map("user_id")
+  tokenHash    String    @map("token_hash")
+  expiresAt    DateTime  @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  replacedById String?   @map("replaced_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }
 
 model Follow {
@@ -36,4 +55,17 @@ model Follow {
   @@index([followerId])
   @@index([followingId])
   @@map("follows")
+}
+
+model FollowRequest {
+  followerId  Int      @map("follower_id")
+  followingId Int      @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower  User @relation("FollowRequestSender", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowRequestRecipient", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followingId, createdAt])
+  @@map("follow_requests")
 }

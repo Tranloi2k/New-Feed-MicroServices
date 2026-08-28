@@ -27,7 +27,6 @@ import { initEventListener } from "./services/eventListener.js";
 import { initOutboxPublisher } from "./services/eventPublisher.js";
 import { createRedisClient } from "./config/redis.js";
 import { closePubSub } from "./config/pubsub.js";
-import { authenToken } from './services/userService.js'
 const app = express();
 const httpServer = createServer(app);
 
@@ -63,26 +62,6 @@ const serverCleanup = useServer(
       const req = ctx.extra?.request;
       if (getTrustedIdentity(req?.headers)) {
         return buildContextFromHeaders(req.headers);
-      }
-
-      const token = ctx.connectionParams?.accessToken;
-      if (token) {
-        try {
-          const { user } = await authenToken(token);
-          if (user?.userId) {
-            return {
-              user: {
-                userId: parseInt(user.userId, 10),
-                email: user.email,
-              },
-              loaders: {
-                user: createUserLoader(),
-              },
-            };
-          }
-        } catch {
-          console.log("Invalid token in GraphQL WS context");
-        }
       }
 
       return { loaders: { user: createUserLoader() } };
@@ -127,30 +106,6 @@ async function startServer() {
       context: async ({ req }) => {
         if (getTrustedIdentity(req.headers)) {
           return buildContextFromHeaders(req.headers);
-        }
-
-        const token =
-          req.cookies?.access_token ||
-          (req.headers.authorization &&
-            req.headers.authorization.split(" ")[1]);
-
-        if (token) {
-          try {
-            const { user } = await authenToken(token);
-            if (user?.userId) {
-              return {
-                user: {
-                  userId: parseInt(user.userId, 10),
-                  email: user.email,
-                },
-                loaders: {
-                  user: createUserLoader(),
-                },
-              };
-            }
-          } catch {
-            console.log("Invalid token in GraphQL context");
-          }
         }
 
         return { loaders: { user: createUserLoader() } };

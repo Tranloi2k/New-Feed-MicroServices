@@ -62,7 +62,14 @@ test("app composition keeps public auth allowlisted and internal auth private", 
       user: null,
     });
 
+    const refresh = await fetch(`${origin}/api/auth/refresh`, {
+      method: "POST",
+    });
+    assert.equal(refresh.status, 200);
+    assert.equal((await refresh.json()).name, "publicAuth");
+
     for (const [method, path] of [
+      ["POST", "/api/auth/validate-token"],
       ["GET", "/api/auth/internal/users/1"],
       ["POST", "/api/auth/internal/users/1"],
       ["GET", "/api/auth/internal/anything?debug=true"],

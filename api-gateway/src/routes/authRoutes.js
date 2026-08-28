@@ -1,7 +1,12 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 
-const PUBLIC_AUTH_ACTIONS = ["login", "signup", "logout", "validate-token"];
+const PUBLIC_AUTH_ACTIONS = [
+  "login",
+  "signup",
+  "logout",
+  "refresh",
+];
 
 export function createAuthRoutes({ proxies, jsonParser }) {
   const router = express.Router();

@@ -7,6 +7,7 @@ pnpm-debug.log*
 lerna-debug.log*
 package-lock.json
 !api-gateway/package-lock.json
+!auth-service/package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
@@ -90,6 +91,8 @@ rabbitmq-data/
 
 # Prisma
 prisma/migrations/*_migration/
+!auth-service/prisma/migrations/
+!auth-service/prisma/migrations/**
 *.db-journal
 
 # Temporary files

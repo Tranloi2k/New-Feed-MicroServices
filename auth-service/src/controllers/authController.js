@@ -1,22 +1,36 @@
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma.js";
 import {
-  cacheUser,
-  getCachedUserExists,
-  cacheUserExists,
   invalidateUserExists,
 } from "../services/cacheService.js";
 import {
   isValidUsername,
   normalizeUsernameInput,
 } from "../utils/username.js";
+import {
+  clearSessionCookies,
+  issueSession,
+  revokeSession,
+  rotateSession,
+  setSessionCookies,
+} from "../services/tokenService.js";
+import { getBcryptRounds } from "../config/env.js";
+import {
+  normalizeEmail,
+  optionalText,
+  positiveInteger,
+  validateEmail,
+  validatePassword,
+} from "../utils/validation.js";
+
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("invalid-password", 10);
 
 // Signup
 export async function signup(req, res) {
   try {
     let { username, email, password, fullName } = req.body;
     username = normalizeUsernameInput(username);
+    email = normalizeEmail(email);
 
     if (!username || !email || !password) {
       return res.status(400).json({
@@ -33,29 +47,25 @@ export async function signup(req, res) {
       });
     }
 
-    // Check if user exists (with cache)
-    let existingUser = null;
-
-    // Check cache first
-    const usernameExists = await getCachedUserExists(username);
-    const emailExists = await getCachedUserExists(email);
-
-    if (usernameExists === true || emailExists === true) {
-      // Cache hit - user exists
-      existingUser = { username: usernameExists ? username : null, email: emailExists ? email : null };
-    } else if (usernameExists === false && emailExists === false) {
-      // Cache hit - user doesn't exist
-      existingUser = null;
-    } else {
-      // Cache miss - query database
-      existingUser = await prisma.user.findFirst({
-        where: { OR: [{ username }, { email }] },
+    const emailError = validateEmail(email);
+    const passwordError = validatePassword(password);
+    const fullNameValue = optionalText(fullName, { field: "fullName", maxLength: 100 });
+    if (emailError || passwordError || fullNameValue.error) {
+      return res.status(400).json({
+        success: false,
+        message: emailError || passwordError || fullNameValue.error,
       });
-
-      // Cache the result
-      await cacheUserExists(username, !!existingUser && existingUser.username === username);
-      await cacheUserExists(email, !!existingUser && existingUser.email === email);
     }
+
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username },
+          { email: { equals: email, mode: "insensitive" } },
+        ],
+      },
+      select: { username: true, email: true },
+    });
 
     if (existingUser) {
       return res.status(409).json({
@@ -68,39 +78,26 @@ export async function signup(req, res) {
     }
 
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, getBcryptRounds());
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        username,
-        email,
-        passwordHash,
-        fullName,
-      },
+    // Create the user and its first refresh session atomically.
+    const session = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          username,
+          email,
+          passwordHash,
+          fullName: fullNameValue.value,
+        },
+      });
+      return issueSession(user, tx);
     });
+    const { user } = session;
 
     // Invalidate existence cache for this username/email
     await invalidateUserExists([username, email]);
 
-    // Generate token
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        username: user.username,
-        email: user.email,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    // Set cookie
-    res.cookie("access_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    setSessionCookies(res, session);
 
     res.status(201).json({
       success: true,
@@ -114,9 +111,10 @@ export async function signup(req, res) {
     });
   } catch (error) {
     console.error("Signup error:", error);
-    res.status(500).json({
+    const duplicate = error.code === "P2002";
+    res.status(duplicate ? 409 : 500).json({
       success: false,
-      message: "Failed to create user",
+      message: duplicate ? "Username or email already exists" : "Failed to create user",
     });
   }
 }
@@ -124,9 +122,10 @@ export async function signup(req, res) {
 // Login
 export async function login(req, res) {
   try {
-    const { email, password } = req.body;
+    const { email: rawIdentifier, password } = req.body;
+    const identifier = normalizeEmail(rawIdentifier);
 
-    if (!email || !password) {
+    if (!identifier || typeof password !== "string") {
       return res.status(400).json({
         success: false,
         message: "Email and password are required",
@@ -135,44 +134,27 @@ export async function login(req, res) {
 
     // Find user
     const user = await prisma.user.findFirst({
-      where: { OR: [{ username: email }, { email }] },
+      where: {
+        OR: [
+          { username: identifier },
+          { email: { equals: identifier, mode: "insensitive" } },
+        ],
+      },
     });
 
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid credentials",
-      });
-    }
-
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-
-    if (!isValidPassword) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid credentials",
-      });
-    }
-
-    // Generate token
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        username: user.username,
-        email: user.email,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+    const isValidPassword = await bcrypt.compare(
+      password,
+      user?.passwordHash || DUMMY_PASSWORD_HASH
     );
 
-    // Set cookie
-    res.cookie("access_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    if (!user || !isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    setSessionCookies(res, await issueSession(user));
 
     res.json({
       success: true,
@@ -194,47 +176,45 @@ export async function login(req, res) {
 }
 
 // Logout
-export function logout(req, res) {
-  res.clearCookie("access_token");
+export async function logout(req, res) {
+  try {
+    await revokeSession(req.cookies?.refresh_token);
+  } catch (error) {
+    console.error("Refresh token revocation error:", error);
+  }
+  clearSessionCookies(res);
   res.json({
     success: true,
     message: "Logout successful",
   });
 }
 
-export function validateToken(req, res) {
+export async function refresh(req, res) {
   try {
-    const { token } = req.body;
-    if (!token) {
+    const session = await rotateSession(req.cookies?.refresh_token);
+    if (!session) {
       return res.status(401).json({
         success: false,
-        message: "Không tìm thấy token xác thực",
+        message: "Invalid or expired refresh token",
       });
     }
 
-    // Xác thực token
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-      if (err) {
-        // Xóa token không hợp lệ khỏi sessions
-        return res.status(403).json({
-          success: false,
-          message: "Token không hợp lệ",
-        });
-      }
-
-      req.user = user;
-      req.token = token;
-      res.status(200).json({
-        success: true,
-        user
-      });
+    setSessionCookies(res, session);
+    return res.json({
+      success: true,
+      message: "Session refreshed",
+      data: {
+        userId: session.user.id,
+        username: session.user.username,
+        email: session.user.email,
+        fullName: session.user.fullName,
+      },
     });
-
   } catch (error) {
+    console.error("Refresh session error:", error);
     return res.status(500).json({
       success: false,
-      message: "Lỗi xác thực",
-      error: error.message,
+      message: "Failed to refresh session",
     });
   }
 }
@@ -295,7 +275,11 @@ export async function getCurrentUser(req, res) {
 // Internal API: Get user by ID (for service-to-service calls)
 export async function getUserById(req, res) {
   try {
-    const userId = parseInt(req.params.id);
+    const parsedId = positiveInteger(req.params.id, "userId");
+    if (parsedId.error) {
+      return res.status(400).json({ success: false, message: parsedId.error });
+    }
+    const userId = parsedId.value;
 
     // Import cache functions at top of this function
     const { getCachedUser, cacheUser: cacheSingleUser } = await import("../services/cacheService.js");

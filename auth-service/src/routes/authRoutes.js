@@ -3,9 +3,9 @@ import {
   signup,
   login,
   logout,
+  refresh,
   getCurrentUser,
   getUserById,
-  validateToken
 } from "../controllers/authController.js";
 import { requireUser } from "../middleware/requireUser.js";
 import { requireServiceAuth } from "../middleware/serviceAuth.js";
@@ -16,8 +16,7 @@ const router = express.Router();
 router.post("/signup", signup);
 router.post("/login", login);
 router.post("/logout", logout);
-router.post("/validate-token", validateToken)
-
+router.post("/refresh", refresh);
 // Protected routes (called from API Gateway with user info in headers)
 router.get("/me", requireUser, getCurrentUser);
 

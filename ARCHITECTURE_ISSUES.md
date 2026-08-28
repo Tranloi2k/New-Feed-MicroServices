@@ -193,6 +193,8 @@ Xóa comment khi post bị xóa lại phụ thuộc vào event và exclusive que
 
 **Mức độ:** P1
 
+**Trạng thái:** Đã xử lý cho Auth Service. Auth có migration history được commit, migration image/job riêng và runtime image không còn chạy `db push`. Post và Comment vẫn cần được chuyển đổi tương tự trước khi ARCH-06 có thể đóng hoàn toàn.
+
 Auth, Post, Comment và Notification chạy lệnh sau khi container khởi động:
 
 ```sh
@@ -206,7 +208,7 @@ Ví dụ:
 - `comment-service/Dockerfile:15-17`
 - `notification-service/Dockerfile:15`
 
-Chỉ Notification Service có migration được commit. Auth, Post và Comment không có migration history.
+Auth và Notification Service đã có migration được commit. Post và Comment chưa có migration history.
 
 Hệ quả:
 

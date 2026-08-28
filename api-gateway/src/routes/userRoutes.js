@@ -33,6 +33,17 @@ export function createUserRoutes({ proxy, jsonParser }) {
     jsonParser,
     proxy
   );
+  router.get("/api/users/me/follow-requests", authenticateToken, proxy);
+  router.post(
+    "/api/users/me/follow-requests/:id/accept",
+    authenticateToken,
+    proxy
+  );
+  router.delete(
+    "/api/users/me/follow-requests/:id",
+    authenticateToken,
+    proxy
+  );
   router.post("/api/users/:id/follow", authenticateToken, proxy);
   router.delete("/api/users/:id/follow", authenticateToken, proxy);
 

@@ -8,8 +8,19 @@ import {
   listFollowing,
   getFollowingIds,
   getFollowerIds,
+  hasPendingFollowRequest,
+  canViewConnections,
+  listFollowRequests,
+  acceptFollowRequest,
+  rejectFollowRequest,
 } from "../services/followService.js";
 import { invalidateUser } from "../services/cacheService.js";
+import {
+  optionalHttpUrl,
+  optionalText,
+  pagination,
+  positiveInteger,
+} from "../utils/validation.js";
 
 function publicUserSelect() {
   return {
@@ -28,6 +39,10 @@ async function buildProfile(user, viewerId) {
   const following =
     viewerId != null ? await isFollowing(viewerId, user.id) : false;
   const isOwnProfile = viewerId != null && viewerId === user.id;
+  const followRequested =
+    viewerId != null && !isOwnProfile && !following
+      ? await hasPendingFollowRequest(viewerId, user.id)
+      : false;
 
   return {
     ...user,
@@ -36,12 +51,13 @@ async function buildProfile(user, viewerId) {
     followingCount: counts.followingCount,
     isFollowing: following,
     isOwnProfile,
+    followRequested,
   };
 }
 
 export async function getProfileByUsername(req, res) {
   try {
-    const username = decodeURIComponent(req.params.username || "").trim();
+    const username = (req.params.username || "").trim().toLowerCase();
     if (!username) {
       return res.status(404).json({
         success: false,
@@ -86,7 +102,9 @@ export async function getProfileByUsername(req, res) {
 
 export async function getProfileById(req, res) {
   try {
-    const userId = parseInt(req.params.id, 10);
+    const parsedId = positiveInteger(req.params.id, "userId");
+    if (parsedId.error) return res.status(400).json({ success: false, message: parsedId.error });
+    const userId = parsedId.value;
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: publicUserSelect(),
@@ -112,13 +130,26 @@ export async function getProfileById(req, res) {
 
 export async function updateMyProfile(req, res) {
   try {
-    const { fullName, bio, avatarUrl } = req.body;
+    const { fullName, bio, avatarUrl, isPrivate } = req.body;
+    const values = {
+      fullName: optionalText(fullName, { field: "fullName", maxLength: 100 }),
+      bio: optionalText(bio, { field: "bio", maxLength: 500 }),
+      avatarUrl: optionalHttpUrl(avatarUrl),
+    };
+    const validationError = Object.values(values).find((value) => value.error)?.error;
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError });
+    }
+    if (isPrivate !== undefined && typeof isPrivate !== "boolean") {
+      return res.status(400).json({ success: false, message: "isPrivate must be a boolean" });
+    }
     const user = await prisma.user.update({
       where: { id: req.user.userId },
       data: {
-        ...(fullName !== undefined && { fullName: fullName?.trim() || null }),
-        ...(bio !== undefined && { bio: bio?.trim() || null }),
-        ...(avatarUrl !== undefined && { avatarUrl: avatarUrl || null }),
+        ...(values.fullName.present && { fullName: values.fullName.value }),
+        ...(values.bio.present && { bio: values.bio.value }),
+        ...(values.avatarUrl.present && { avatarUrl: values.avatarUrl.value }),
+        ...(isPrivate !== undefined && { isPrivate }),
       },
       select: publicUserSelect(),
     });
@@ -142,15 +173,15 @@ export async function updateMyProfile(req, res) {
 
 export async function followUserHandler(req, res) {
   try {
-    const targetId = parseInt(req.params.id, 10);
-    await followUser(req.user.userId, targetId);
-    const following = true;
-    const counts = await getFollowCounts(targetId);
+    const parsedId = positiveInteger(req.params.id, "userId");
+    if (parsedId.error) return res.status(400).json({ success: false, message: parsedId.error });
+    const targetId = parsedId.value;
+    const result = await followUser(req.user.userId, targetId);
 
     res.json({
       success: true,
-      message: "Followed successfully",
-      data: { isFollowing: following, ...counts },
+      message: result.followRequested ? "Follow request sent" : "Followed successfully",
+      data: result,
     });
   } catch (error) {
     const status =
@@ -161,14 +192,17 @@ export async function followUserHandler(req, res) {
           : 500;
     res.status(status).json({
       success: false,
-      message: error.message || "Failed to follow user",
+      message:
+        status < 500 ? error.message : "Failed to follow user",
     });
   }
 }
 
 export async function unfollowUserHandler(req, res) {
   try {
-    const targetId = parseInt(req.params.id, 10);
+    const parsedId = positiveInteger(req.params.id, "userId");
+    if (parsedId.error) return res.status(400).json({ success: false, message: parsedId.error });
+    const targetId = parsedId.value;
     await unfollowUser(req.user.userId, targetId);
 
     res.json({
@@ -187,10 +221,13 @@ export async function unfollowUserHandler(req, res) {
 
 export async function getUserFollowers(req, res) {
   try {
-    const userId = parseInt(req.params.id, 10);
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const cursor = req.query.cursor ? parseInt(req.query.cursor, 10) : undefined;
-    const result = await listFollowers(userId, { limit, cursor });
+    const parsedId = positiveInteger(req.params.id, "userId");
+    const page = pagination(req.query);
+    if (parsedId.error || page.error) return res.status(400).json({ success: false, message: parsedId.error || page.error });
+    if (!(await canViewConnections(req.viewerId, parsedId.value))) {
+      return res.status(403).json({ success: false, message: "This account is private" });
+    }
+    const result = await listFollowers(parsedId.value, page);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error("Get followers error:", error);
@@ -203,10 +240,13 @@ export async function getUserFollowers(req, res) {
 
 export async function getUserFollowing(req, res) {
   try {
-    const userId = parseInt(req.params.id, 10);
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const cursor = req.query.cursor ? parseInt(req.query.cursor, 10) : undefined;
-    const result = await listFollowing(userId, { limit, cursor });
+    const parsedId = positiveInteger(req.params.id, "userId");
+    const page = pagination(req.query);
+    if (parsedId.error || page.error) return res.status(400).json({ success: false, message: parsedId.error || page.error });
+    if (!(await canViewConnections(req.viewerId, parsedId.value))) {
+      return res.status(403).json({ success: false, message: "This account is private" });
+    }
+    const result = await listFollowing(parsedId.value, page);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error("Get following error:", error);
@@ -219,9 +259,12 @@ export async function getUserFollowing(req, res) {
 
 export async function getFollowingIdsInternal(req, res) {
   try {
-    const userId = parseInt(req.params.id, 10);
-    const ids = await getFollowingIds(userId);
-    res.json({ success: true, data: { ids } });
+    const parsedId = positiveInteger(req.params.id, "userId");
+    if (parsedId.error) return res.status(400).json({ success: false, message: parsedId.error });
+    const userId = parsedId.value;
+    const page = internalPage(req.query);
+    if (page.error) return res.status(400).json({ success: false, message: page.error });
+    res.json({ success: true, data: await getFollowingIds(userId, page) });
   } catch (error) {
     console.error("Get following ids error:", error);
     res.status(500).json({
@@ -231,14 +274,46 @@ export async function getFollowingIdsInternal(req, res) {
   }
 }
 
+export async function getMyFollowRequests(req, res) {
+  try {
+    const page = pagination(req.query);
+    if (page.error) return res.status(400).json({ success: false, message: page.error });
+    res.json({ success: true, data: await listFollowRequests(req.user.userId, page) });
+  } catch (error) {
+    console.error("Get follow requests error:", error);
+    res.status(500).json({ success: false, message: "Failed to load follow requests" });
+  }
+}
+
+async function resolveFollowRequest(req, res, action) {
+  try {
+    const parsedId = positiveInteger(req.params.id, "followerId");
+    if (parsedId.error) return res.status(400).json({ success: false, message: parsedId.error });
+    const data = await action(req.user.userId, parsedId.value);
+    return res.json({ success: true, data: data || null });
+  } catch (error) {
+    const status = error.message === "Follow request not found" ? 404 : 500;
+    return res.status(status).json({ success: false, message: status === 404 ? error.message : "Failed to update follow request" });
+  }
+}
+
+export function acceptFollowRequestHandler(req, res) {
+  return resolveFollowRequest(req, res, acceptFollowRequest);
+}
+
+export function rejectFollowRequestHandler(req, res) {
+  return resolveFollowRequest(req, res, rejectFollowRequest);
+}
+
 export async function getFollowerIdsInternal(req, res) {
   try {
     const userId = Number(req.params.id);
     if (!Number.isSafeInteger(userId) || userId <= 0) {
       return res.status(400).json({ success: false, message: "Invalid user id" });
     }
-    const ids = await getFollowerIds(userId);
-    res.json({ success: true, data: { ids } });
+    const page = internalPage(req.query);
+    if (page.error) return res.status(400).json({ success: false, message: page.error });
+    res.json({ success: true, data: await getFollowerIds(userId, page) });
   } catch (error) {
     console.error("Get follower ids error:", error);
     res.status(500).json({
@@ -246,4 +321,16 @@ export async function getFollowerIdsInternal(req, res) {
       message: "Failed to load follower ids",
     });
   }
+}
+
+function internalPage(query = {}) {
+  const limit = query.limit === undefined ? 500 : Number(query.limit);
+  const cursor = query.cursor === undefined ? 0 : Number(query.cursor);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+    return { error: "limit must be an integer between 1 and 500" };
+  }
+  if (!Number.isSafeInteger(cursor) || cursor < 0) {
+    return { error: "cursor must be a non-negative integer" };
+  }
+  return { limit, cursor };
 }

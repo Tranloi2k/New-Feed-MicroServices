@@ -9,6 +9,9 @@ import {
   getUserFollowing,
   getFollowingIdsInternal,
   getFollowerIdsInternal,
+  getMyFollowRequests,
+  acceptFollowRequestHandler,
+  rejectFollowRequestHandler,
 } from "../controllers/profileController.js";
 import { requireUser, optionalViewer } from "../middleware/requireUser.js";
 import { requireServiceAuth } from "../middleware/serviceAuth.js";
@@ -16,6 +19,9 @@ import { requireServiceAuth } from "../middleware/serviceAuth.js";
 const router = express.Router();
 
 router.patch("/me/profile", requireUser, updateMyProfile);
+router.get("/me/follow-requests", requireUser, getMyFollowRequests);
+router.post("/me/follow-requests/:id/accept", requireUser, acceptFollowRequestHandler);
+router.delete("/me/follow-requests/:id", requireUser, rejectFollowRequestHandler);
 router.get("/username/:username", optionalViewer, getProfileByUsername);
 router.get("/:id/profile", optionalViewer, getProfileById);
 router.get("/:id/followers", optionalViewer, getUserFollowers);

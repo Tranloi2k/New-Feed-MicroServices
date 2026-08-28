@@ -14,7 +14,7 @@ A social media platform built with microservices architecture using Node.js, Exp
 NewFeed is a complete social media platform with microservices architecture:
 
 **Key Features:**
-- ✅ **Authentication** - JWT with httpOnly cookies
+- ✅ **Authentication** - Access JWT 30 phút và refresh token xoay vòng 30 ngày trong httpOnly cookies
 - ✅ **Posts** - CRUD with GraphQL, cursor pagination
 - ✅ **Comments** - Real-time via Server-Sent Events (SSE)
 - ✅ **Media Upload** - Cloudinary with image optimization
@@ -405,15 +405,19 @@ socket.emit("unsubscribe-post", postId);
 **POST /api/auth/signup**
 - Register new user
 - Body: `{ username, email, password, fullName }`
-- Response: User object + JWT token
+- Response: User object; access và refresh token được đặt bằng httpOnly cookies
 
 **POST /api/auth/login**
 - Login with credentials
 - Body: `{ email, password }`
-- Response: JWT token (httpOnly cookie)
+- Response: Access JWT 30 phút và refresh token 30 ngày (httpOnly cookies)
+
+**POST /api/auth/refresh**
+- Rotate refresh token và cấp access JWT mới
+- Refresh token cũ bị revoke sau khi sử dụng
 
 **POST /api/auth/logout**
-- Clear authentication cookie
+- Revoke refresh token và xóa cả hai authentication cookies
 
 **GET /api/auth/me**
 - Get current authenticated user
