@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: post-service
+  namespace: newfeed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: post-service
+  template:
+    metadata:
+      labels:
+        app: post-service
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      initContainers:
+        - name: migrate
+          image: ghcr.io/tranloi2k/new-feed-microservices-post-service:latest
+          command: ["npx", "prisma", "migrate", "deploy"]
+          envFrom:
+            - secretRef:
+                name: app-secrets
+          env:
+            - name: DATABASE_URL
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-post:5432/post_db
+      containers:
+        - name: post-service
+          image: ghcr.io/tranloi2k/new-feed-microservices-post-service:latest
+          ports:
+            - containerPort: 3002
+          envFrom:
+            - secretRef:
+                name: app-secrets
+          env:
+            - name: PORT
+              value: "3002"
+            - name: DATABASE_URL
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-post:5432/post_db
+            - name: RABBITMQ_URL
+              value: amqp://$(RABBITMQ_USER):$(RABBITMQ_PASSWORD)@rabbitmq:5672
+            - name: AUTH_SERVICE_URL
+              value: http://auth-service:3001
+            - name: REDIS_URL
+              value: redis://redis:6379
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "384Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: post-service
+  namespace: newfeed
+spec:
+  selector:
+    app: post-service
+  ports:
+    - port: 3002
+      targetPort: 3002
