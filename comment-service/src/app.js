@@ -12,18 +12,11 @@ import bodyParser from "body-parser";
 import typeDefs from "./graphql/schema.js";
 import resolvers from "./graphql/resolvers.js";
 import { createUserLoader } from "./graphql/loaders/userLoader.js";
+import { getTrustedIdentity } from "./middleware/trustedIdentity.js";
 
 function buildContextFromHeaders(headers = {}) {
-  const userId = headers["x-user-id"];
-  const userEmail = headers["x-user-email"];
-
   return {
-    user: userId
-      ? {
-          userId: parseInt(userId, 10),
-          email: userEmail,
-        }
-      : null,
+    user: getTrustedIdentity(headers),
     loaders: {
       user: createUserLoader(),
     },
@@ -68,7 +61,7 @@ const serverCleanup = useServer(
     schema,
     context: async (ctx) => {
       const req = ctx.extra?.request;
-      if (req?.headers?.["x-user-id"]) {
+      if (getTrustedIdentity(req?.headers)) {
         return buildContextFromHeaders(req.headers);
       }
 
@@ -132,7 +125,7 @@ async function startServer() {
     bodyParser.json(),
     expressMiddleware(apolloServer, {
       context: async ({ req }) => {
-        if (req.headers["x-user-id"]) {
+        if (getTrustedIdentity(req.headers)) {
           return buildContextFromHeaders(req.headers);
         }
 
@@ -221,4 +214,3 @@ async function startServer() {
 startServer().catch((error) => {
   process.exit(1);
 });
-

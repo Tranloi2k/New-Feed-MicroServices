@@ -77,8 +77,6 @@ class CacheService {
         try {
             const redis = getRedisClient();
 
-            // IMPORTANT: With keyPrefix 'post:', we need to include full pattern
-            // Pattern should already include the prefix when called
             const stream = redis.scanStream({
                 match: pattern,
                 count: 100
@@ -98,17 +96,14 @@ class CacheService {
             });
 
             if (keysToDelete.length > 0) {
-                // Keys from SCAN include full prefix, need to strip it before DEL
-                const keysWithoutPrefix = keysToDelete.map(key => key.replace(/^post:/, ''));
-
                 const batchSize = 100;
-                for (let i = 0; i < keysWithoutPrefix.length; i += batchSize) {
-                    const batch = keysWithoutPrefix.slice(i, i + batchSize);
+                for (let i = 0; i < keysToDelete.length; i += batchSize) {
+                    const batch = keysToDelete.slice(i, i + batchSize);
                     await redis.del(...batch);
                 }
 
-                console.log(`🗑️  Invalidated ${keysWithoutPrefix.length} cache entries: ${pattern}`);
-                return keysWithoutPrefix.length;
+                console.log(`🗑️  Invalidated ${keysToDelete.length} cache entries: ${pattern}`);
+                return keysToDelete.length;
             }
             return 0;
         } catch (error) {
@@ -168,6 +163,13 @@ class CacheService {
         // Pattern must match actual newsfeed cache keys
         const pattern = `${this.KEYS.NEWS_FEED}*`;
         await this.delPattern(pattern);
+    }
+
+    async invalidateAllPostData() {
+        await Promise.all([
+            this.delPattern(`${this.KEYS.POST}*`),
+            this.delPattern(`${this.KEYS.NEWS_FEED}*`),
+        ]);
     }
 
     /**

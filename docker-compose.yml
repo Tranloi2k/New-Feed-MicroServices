@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # API Gateway
   api-gateway:
@@ -7,7 +5,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV}
       - PORT=8080
       - AUTH_SERVICE_URL=http://auth-service:3001
       - POST_SERVICE_URL=http://post-service:3002
@@ -16,7 +14,7 @@ services:
       - NOTIFICATION_SERVICE_URL=http://notification-service:3005
       - JWT_SECRET=${JWT_SECRET}
       - SERVICE_SECRET=${SERVICE_SECRET}
-      - CLIENT_URL=http://localhost:3000
+      - CLIENT_URL=${CLIENT_URL}
       - REDIS_URL=redis://redis:6379
     depends_on:
       - redis
@@ -31,15 +29,20 @@ services:
   auth-service:
     build: ./auth-service
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV}
       - PORT=3001
-      - DATABASE_URL=postgresql://postgres:postgres@postgres-auth:5432/auth_db
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/auth_db
       - JWT_SECRET=${JWT_SECRET}
       - SERVICE_SECRET=${SERVICE_SECRET}
-      - CLIENT_URL=http://localhost:3000
+      - CLIENT_URL=${CLIENT_URL}
       - REDIS_URL=redis://redis:6379
+      - DEMO_LOGIN_ENABLED=${DEMO_LOGIN_ENABLED:-}
+      - DEMO_USER_EMAIL=${DEMO_USER_EMAIL:-demo@newfeed.local}
+      - DEMO_USER_PASSWORD=${DEMO_USER_PASSWORD:-Demo123!}
+      - DEMO_USER_USERNAME=${DEMO_USER_USERNAME:-demo}
+      - DEMO_USER_FULL_NAME=${DEMO_USER_FULL_NAME:-Demo User}
     depends_on:
       - postgres-auth
       - redis
@@ -50,15 +53,15 @@ services:
   post-service:
     build: ./post-service
     ports:
-      - "3002:3002"
+      - "127.0.0.1:3002:3002"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV}
       - PORT=3002
-      - DATABASE_URL=postgresql://postgres:postgres@postgres-post:5432/post_db
-      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-post:5432/post_db
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - AUTH_SERVICE_URL=http://auth-service:3001
       - SERVICE_SECRET=${SERVICE_SECRET}
-      - CLIENT_URL=http://localhost:3000
+      - CLIENT_URL=${CLIENT_URL}
       - REDIS_URL=redis://redis:6379
     depends_on:
       - postgres-post
@@ -71,16 +74,16 @@ services:
   comment-service:
     build: ./comment-service
     ports:
-      - "3004:3004"
+      - "127.0.0.1:3004:3004"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV}
       - PORT=3004
-      - DATABASE_URL=postgresql://postgres:postgres@postgres-comment:5432/comment_db
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-comment:5432/comment_db
       - AUTH_SERVICE_URL=http://auth-service:3001
       - POST_SERVICE_URL=http://post-service:3002  
-      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - SERVICE_SECRET=${SERVICE_SECRET}
-      - CLIENT_URL=http://localhost:3000
+      - CLIENT_URL=${CLIENT_URL}
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -96,15 +99,15 @@ services:
   media-service:
     build: ./media-service
     ports:
-      - "3003:3003"
+      - "127.0.0.1:3003:3003"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV}
       - PORT=3003
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
       - SERVICE_SECRET=${SERVICE_SECRET}
-      - CLIENT_URL=http://localhost:3000
+      - CLIENT_URL=${CLIENT_URL}
     networks:
       - microservices-network
 
@@ -112,14 +115,15 @@ services:
   notification-service:
     build: ./notification-service
     ports:
-      - "3005:3005"
+      - "127.0.0.1:3005:3005"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV}
       - PORT=3005
-      - DATABASE_URL=postgresql://postgres:postgres@postgres-notification:5432/notification_db
-      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-notification:5432/notification_db
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET}
-      - CLIENT_URL=http://localhost:3000
+      - SERVICE_SECRET=${SERVICE_SECRET}
+      - CLIENT_URL=${CLIENT_URL}
     depends_on:
       - postgres-notification
       - rabbitmq
@@ -130,12 +134,12 @@ services:
     image: postgres:14-alpine
     environment:
       POSTGRES_DB: notification_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - notification-db-data:/var/lib/postgresql/data
     ports:
-      - "5436:5432"
+      - "127.0.0.1:5436:5432"
     networks:
       - microservices-network
 
@@ -144,12 +148,12 @@ services:
     image: postgres:14-alpine
     environment:
       POSTGRES_DB: auth_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - auth-db-data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     networks:
       - microservices-network
 
@@ -157,12 +161,12 @@ services:
     image: postgres:14-alpine
     environment:
       POSTGRES_DB: post_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - post-db-data:/var/lib/postgresql/data
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     networks:
       - microservices-network
 
@@ -170,12 +174,12 @@ services:
     image: postgres:14-alpine
     environment:
       POSTGRES_DB: comment_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - comment-db-data:/var/lib/postgresql/data
     ports:
-      - "5435:5432"
+      - "127.0.0.1:5435:5432"
     networks:
       - microservices-network
 
@@ -183,7 +187,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes
@@ -194,11 +198,11 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     ports:
-      - "5673:5672"
-      - "15673:15672"
+      - "127.0.0.1:5673:5672"
+      - "127.0.0.1:15673:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: admin
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     networks:

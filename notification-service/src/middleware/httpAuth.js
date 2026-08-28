@@ -1,14 +1,10 @@
 import jwt from "jsonwebtoken";
+import { getTrustedIdentity } from "./trustedIdentity.js";
 
 export function requireUser(req, res, next) {
-  const userIdHeader = req.headers["x-user-id"];
-  const userEmail = req.headers["x-user-email"];
-
-  if (userIdHeader) {
-    req.user = {
-      userId: parseInt(userIdHeader, 10),
-      email: userEmail,
-    };
+  const trustedIdentity = getTrustedIdentity(req.headers);
+  if (trustedIdentity) {
+    req.user = trustedIdentity;
     return next();
   }
 

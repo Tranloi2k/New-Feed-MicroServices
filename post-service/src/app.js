@@ -8,18 +8,11 @@ import typeDefs from "./graphql/schema.js";
 import resolvers from "./graphql/resolvers.js";
 import { createUserLoader } from "./graphql/loaders/userLoader.js";
 import { createRedisClient } from "./config/redis.js";
+import { getTrustedIdentity } from "./middleware/trustedIdentity.js";
 
 function buildContext(req) {
-  const userId = req.headers["x-user-id"];
-  const userEmail = req.headers["x-user-email"];
-
   return {
-    user: userId
-      ? {
-          userId: parseInt(userId, 10),
-          email: userEmail,
-        }
-      : null,
+    user: getTrustedIdentity(req.headers),
     loaders: {
       user: createUserLoader(),
     },

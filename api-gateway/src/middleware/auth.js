@@ -1,18 +1,28 @@
 import jwt from "jsonwebtoken";
 
-// Verify JWT token and return decoded user or null
+export function extractAccessToken(req) {
+  const cookieToken = req.cookies?.access_token;
+  if (cookieToken) return cookieToken;
+
+  const match = req.headers.authorization?.match(/^Bearer\s+([^\s]+)$/i);
+  return match?.[1] || null;
+}
+
 export function verifyToken(token) {
   try {
-    return jwt.verify(token, process.env.JWT_SECRET);
-  } catch (error) {
+    const payload = jwt.verify(token, process.env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    });
+    const userId = Number(payload.userId);
+    if (!Number.isSafeInteger(userId) || userId <= 0) return null;
+    return { ...payload, userId };
+  } catch {
     return null;
   }
 }
 
 export function authenticateToken(req, res, next) {
-  const token =
-    req.cookies.access_token ||
-    req.headers.authorization?.replace("Bearer ", "");
+  const token = extractAccessToken(req);
 
   if (!token) {
     return res.status(401).json({
@@ -24,7 +34,7 @@ export function authenticateToken(req, res, next) {
   const user = verifyToken(token);
 
   if (!user) {
-    return res.status(403).json({
+    return res.status(401).json({
       success: false,
       message: "Invalid or expired token",
     });
@@ -36,9 +46,7 @@ export function authenticateToken(req, res, next) {
 
 /** Sets req.user when token is valid; does not block unauthenticated requests */
 export function optionalAuthenticateToken(req, res, next) {
-  const token =
-    req.cookies.access_token ||
-    req.headers.authorization?.replace(/^Bearer\s+/i, "");
+  const token = extractAccessToken(req);
 
   if (token) {
     const user = verifyToken(token);

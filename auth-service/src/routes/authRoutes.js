@@ -7,6 +7,7 @@ import {
   getUserById,
   validateToken
 } from "../controllers/authController.js";
+import { requireUser } from "../middleware/requireUser.js";
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ router.post("/logout", logout);
 router.post("/validate-token", validateToken)
 
 // Protected routes (called from API Gateway with user info in headers)
-router.get("/me", getCurrentUser);
+router.get("/me", requireUser, getCurrentUser);
 
 // Internal routes (service-to-service)
 router.get("/internal/users/:id", getUserById);

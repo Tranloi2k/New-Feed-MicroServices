@@ -24,6 +24,18 @@ function extractTokenFromUrl(url = "") {
   }
 }
 
+function redactUrl(url = "") {
+  try {
+    const parsed = new URL(url, "http://gateway.local");
+    for (const key of ["access_token", "token", "Authorization"]) {
+      if (parsed.searchParams.has(key)) parsed.searchParams.set(key, "[REDACTED]");
+    }
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return "[invalid-url]";
+  }
+}
+
 /**
  * Authenticate raw HTTP upgrade requests (WebSocket).
  * Sets req.user when valid; returns false and destroys socket when invalid.
@@ -36,7 +48,7 @@ export function authenticateUpgrade(req, socket) {
     extractTokenFromUrl(req.url);
 
   if (!token) {
-    logger.warn(`[WS Auth] Rejected upgrade: missing token (${req.url})`);
+    logger.warn(`[WS Auth] Rejected upgrade: missing token (${redactUrl(req.url)})`);
     socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
     socket.destroy();
     return false;
@@ -44,7 +56,7 @@ export function authenticateUpgrade(req, socket) {
 
   const user = verifyToken(token);
   if (!user) {
-    logger.warn(`[WS Auth] Rejected upgrade: invalid token (${req.url})`);
+    logger.warn(`[WS Auth] Rejected upgrade: invalid token (${redactUrl(req.url)})`);
     socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
     socket.destroy();
     return false;

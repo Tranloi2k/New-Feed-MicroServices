@@ -8,7 +8,7 @@ const levels = {
     debug: 3,
 };
 
-const currentLevel = levels[process.env.LOG_LEVEL] || levels.info;
+const currentLevel = levels[process.env.LOG_LEVEL] ?? levels.info;
 
 function log(level, ...args) {
     if (levels[level] <= currentLevel) {

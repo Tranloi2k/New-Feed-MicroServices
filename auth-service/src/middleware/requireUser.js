@@ -1,34 +1,22 @@
+import { getTrustedIdentity } from "./trustedIdentity.js";
+
 export function requireUser(req, res, next) {
-  const userIdHeader = req.headers["x-user-id"];
-  if (!userIdHeader) {
+  const user = getTrustedIdentity(req.headers);
+  if (!user) {
     return res.status(401).json({
       success: false,
       message: "Authentication required",
     });
   }
 
-  const userId = parseInt(userIdHeader, 10);
-  if (Number.isNaN(userId)) {
-    return res.status(401).json({
-      success: false,
-      message: "Invalid user identity",
-    });
-  }
-
-  req.user = {
-    userId,
-    email: req.headers["x-user-email"],
-  };
+  req.user = user;
   next();
 }
 
 export function optionalViewer(req, res, next) {
-  const userIdHeader = req.headers["x-user-id"];
-  if (userIdHeader) {
-    const userId = parseInt(userIdHeader, 10);
-    if (!Number.isNaN(userId)) {
-      req.viewerId = userId;
-    }
+  const user = getTrustedIdentity(req.headers);
+  if (user) {
+    req.viewerId = user.userId;
   }
   next();
 }

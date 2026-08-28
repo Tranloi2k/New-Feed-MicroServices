@@ -1,141 +1,115 @@
-/**
- * Rate Limit Rules Configuration
- * Using Leaky Bucket Algorithm
- * 
- * Each rule defines:
- * - windowMs: Time window in milliseconds
- * - maxRequests: Maximum requests allowed in the window
- * - message: Error message when limit exceeded
- */
-
 export const rateLimitRules = {
-    // Default rule for all endpoints
+  default: {
+    bucket: "default",
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 100,
+    message: "Quá nhiều requests. Vui lòng thử lại sau.",
+  },
+  auth: {
+    login: {
+      bucket: "auth:login",
+      windowMs: 15 * 60 * 1000,
+      maxRequests: 5,
+      message: "Quá nhiều lần đăng nhập. Vui lòng thử lại sau 15 phút.",
+    },
+    signup: {
+      bucket: "auth:signup",
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 3,
+      message: "Quá nhiều lần đăng ký. Vui lòng thử lại sau 1 giờ.",
+    },
     default: {
-        windowMs: 15 * 60 * 1000, // 15 minutes
-        maxRequests: 100,
-        message: "Quá nhiều requests. Vui lòng thử lại sau.",
+      bucket: "auth:default",
+      windowMs: 15 * 60 * 1000,
+      maxRequests: 20,
+      message: "Quá nhiều requests đến auth service. Vui lòng thử lại sau.",
     },
-
-    // Authentication endpoints
-    auth: {
-        // Login endpoint - stricter limit
-        login: {
-            windowMs: 15 * 60 * 1000, // 15 minutes
-            maxRequests: 5, // Only 5 login attempts
-            message:
-                "Quá nhiều lần đăng nhập thất bại. Vui lòng thử lại sau 15 phút.",
-        },
-
-        // Register endpoint
-        register: {
-            windowMs: 60 * 60 * 1000, // 1 hour
-            maxRequests: 3, // Only 3 registration attempts
-            message: "Quá nhiều lần đăng ký. Vui lòng thử lại sau 1 giờ.",
-        },
-
-        // Refresh token endpoint
-        refresh: {
-            windowMs: 5 * 60 * 1000, // 5 minutes
-            maxRequests: 10,
-            message: "Quá nhiều lần refresh token. Vui lòng thử lại sau.",
-        },
-
-        // Default for other auth endpoints
-        default: {
-            windowMs: 15 * 60 * 1000, // 15 minutes
-            maxRequests: 20,
-            message: "Quá nhiều requests đến auth service. Vui lòng thử lại sau.",
-        },
+  },
+  posts: {
+    create: {
+      bucket: "posts:create",
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 10,
+      message: "Bạn đã tạo quá nhiều bài viết. Vui lòng thử lại sau 1 giờ.",
     },
-
-    // Post endpoints
-    posts: {
-        // Create post
-        create: {
-            windowMs: 60 * 60 * 1000, // 1 hour
-            maxRequests: 10, // 10 posts per hour
-            message: "Bạn đã tạo quá nhiều bài viết. Vui lòng thử lại sau 1 giờ.",
-        },
-
-        // List posts (expensive operation)
-        list: {
-            windowMs: 1 * 60 * 1000, // 1 minute
-            maxRequests: 30,
-            message: "Quá nhiều requests. Vui lòng thử lại sau.",
-        },
-
-        // Default for other post endpoints
-        default: {
-            windowMs: 15 * 60 * 1000, // 15 minutes
-            maxRequests: 50,
-            message: "Quá nhiều requests đến post service. Vui lòng thử lại sau.",
-        },
+    list: {
+      bucket: "posts:list",
+      windowMs: 60 * 1000,
+      maxRequests: 30,
+      message: "Quá nhiều requests tải feed. Vui lòng thử lại sau.",
     },
-
-    // Comment endpoints
-    comments: {
-        // Create comment
-        create: {
-            windowMs: 15 * 60 * 1000, // 15 minutes
-            maxRequests: 30, // 30 comments per 15 minutes
-            message: "Bạn đã comment quá nhiều. Vui lòng thử lại sau.",
-        },
-
-        // Default for other comment endpoints
-        default: {
-            windowMs: 15 * 60 * 1000, // 15 minutes
-            maxRequests: 60,
-            message: "Quá nhiều requests đến comment service. Vui lòng thử lại sau.",
-        },
+    default: {
+      bucket: "posts:default",
+      windowMs: 15 * 60 * 1000,
+      maxRequests: 50,
+      message: "Quá nhiều requests đến post service. Vui lòng thử lại sau.",
     },
-
-    // Media upload endpoints
-    media: {
-        // Upload endpoint - very strict
-        upload: {
-            windowMs: 60 * 60 * 1000, // 1 hour
-            maxRequests: 20, // 20 uploads per hour
-            message: "Bạn đã upload quá nhiều file. Vui lòng thử lại sau 1 giờ.",
-        },
-
-        // Default for other media endpoints
-        default: {
-            windowMs: 15 * 60 * 1000, // 15 minutes
-            maxRequests: 100,
-            message: "Quá nhiều requests đến media service. Vui lòng thử lại sau.",
-        },
+  },
+  comments: {
+    create: {
+      bucket: "comments:create",
+      windowMs: 15 * 60 * 1000,
+      maxRequests: 30,
+      message: "Bạn đã comment quá nhiều. Vui lòng thử lại sau.",
     },
+    default: {
+      bucket: "comments:default",
+      windowMs: 15 * 60 * 1000,
+      maxRequests: 60,
+      message: "Quá nhiều requests đến comment service. Vui lòng thử lại sau.",
+    },
+  },
+  media: {
+    upload: {
+      bucket: "media:upload",
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 20,
+      message: "Bạn đã upload quá nhiều file. Vui lòng thử lại sau 1 giờ.",
+    },
+  },
 };
 
-/**
- * Get rate limit rule for a specific endpoint
- * @param {string} path - Request path (e.g., "/api/auth/login")
- * @returns {Object} Rate limit rule
- */
-export function getRateLimitRule(path) {
-    // Extract service and action from path
-    // Path format: /api/{service}/{action}
-    const parts = path.split("/").filter(Boolean);
+function graphqlDocumentContains(body, operationName) {
+  const operations = Array.isArray(body) ? body : [body];
+  return operations.some((operation) => {
+    const document = `${operation?.operationName || ""} ${operation?.query || ""}`;
+    return new RegExp(`\\b${operationName}\\b`).test(document);
+  });
+}
 
-    if (parts.length < 2) {
-        return rateLimitRules.default;
+export function getRateLimitRule(path, { method = "GET", body } = {}) {
+  if (path === "/api/auth/login") return rateLimitRules.auth.login;
+  if (path === "/api/auth/signup") return rateLimitRules.auth.signup;
+  if (path.startsWith("/api/auth/")) return rateLimitRules.auth.default;
+
+  if (path === "/graphql/post") {
+    if (graphqlDocumentContains(body, "createPost")) {
+      return rateLimitRules.posts.create;
     }
-
-    const service = parts[1]; // e.g., "auth", "posts", "comments"
-    const action = parts[2]; // e.g., "login", "register", "create"
-
-    // Check if we have rules for this service
-    if (!rateLimitRules[service]) {
-        return rateLimitRules.default;
+    if (
+      graphqlDocumentContains(body, "getNewsFeed") ||
+      graphqlDocumentContains(body, "getFollowingFeed")
+    ) {
+      return rateLimitRules.posts.list;
     }
+    return rateLimitRules.posts.default;
+  }
 
-    const serviceRules = rateLimitRules[service];
+  if (path === "/graphql/comment") {
+    return graphqlDocumentContains(body, "createComment")
+      ? rateLimitRules.comments.create
+      : rateLimitRules.comments.default;
+  }
 
-    // Check if we have a specific rule for this action
-    if (action && serviceRules[action]) {
-        return serviceRules[action];
-    }
+  if (path.startsWith("/api/comments")) {
+    return method === "POST"
+      ? rateLimitRules.comments.create
+      : rateLimitRules.comments.default;
+  }
 
-    // Return service default or global default
-    return serviceRules.default || rateLimitRules.default;
+  if (path.startsWith("/api/media/upload")) {
+    return rateLimitRules.media.upload;
+  }
+
+  return rateLimitRules.default;
 }

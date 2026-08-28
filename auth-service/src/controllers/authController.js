@@ -242,15 +242,7 @@ export function validateToken(req, res) {
 // Get current user (identity from API Gateway JWT → X-User-Id)
 export async function getCurrentUser(req, res) {
   try {
-    const userIdHeader = req.headers["x-user-id"];
-    if (!userIdHeader) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
-    }
-
-    const userId = parseInt(userIdHeader, 10);
+    const userId = req.user.userId;
 
     // Import cache functions at top of this function
     const { getCachedUser, cacheUser: cacheSingleUser } = await import("../services/cacheService.js");

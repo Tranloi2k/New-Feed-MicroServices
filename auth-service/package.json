@@ -8,6 +8,7 @@
     "dev": "nodemon src/app.js",
     "prestart": "prisma generate",
     "start": "node src/app.js",
+    "seed:demo": "node scripts/seed-demo-user.mjs",
     "migrate": "prisma migrate dev",
     "generate": "prisma generate"
   },

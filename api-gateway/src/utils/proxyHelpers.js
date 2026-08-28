@@ -1,19 +1,41 @@
 import { logger } from "./logger.js";
 
-export function restreamBody(proxyReq, req) {
-  if (req.body) {
-    const bodyData = JSON.stringify(req.body);
-    proxyReq.setHeader("Content-Type", "application/json");
-    proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
-    proxyReq.write(bodyData);
-    proxyReq.end();
+const INTERNAL_IDENTITY_HEADERS = [
+  "x-user-id",
+  "x-user-email",
+  "x-service-token",
+];
+
+export function stripUntrustedIdentityHeaders(req, _res, next) {
+  for (const header of INTERNAL_IDENTITY_HEADERS) {
+    delete req.headers[header];
   }
+  next();
+}
+
+export function restreamBody(proxyReq, req) {
+  if (req.body === undefined || req.body === null) return;
+
+  const bodyData = JSON.stringify(req.body);
+  proxyReq.removeHeader("content-encoding");
+  proxyReq.removeHeader("transfer-encoding");
+  proxyReq.setHeader("Content-Type", "application/json");
+  proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
+  proxyReq.write(bodyData);
 }
 
 export function forwardUserHeaders(proxyReq, req) {
+  for (const header of INTERNAL_IDENTITY_HEADERS) {
+    proxyReq.removeHeader(header);
+  }
+
+  proxyReq.setHeader("X-Service-Token", process.env.SERVICE_SECRET);
+
   if (req.user) {
     proxyReq.setHeader("X-User-Id", req.user.userId);
-    proxyReq.setHeader("X-User-Email", req.user.email);
+    if (req.user.email) {
+      proxyReq.setHeader("X-User-Email", req.user.email);
+    }
   }
 }
 
@@ -38,6 +60,7 @@ export function handleProxyError(err, req, res, { target, message }) {
       success: false,
       message,
     });
+    return;
   }
   if (res && typeof res.destroy === "function") {
     res.destroy();

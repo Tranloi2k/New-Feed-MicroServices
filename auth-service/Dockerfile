@@ -14,4 +14,4 @@ EXPOSE 3001
 
 # For development: use db push (no migration files needed)
 # For production: use migrate deploy with migration files
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node src/app.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npm run seed:demo && node src/app.js"]
