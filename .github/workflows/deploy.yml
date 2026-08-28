@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: Build and Update Manifests
 
 on:
   push:
@@ -45,43 +45,39 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
-            ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:latest
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
-  deploy:
+  update-manifests:
     needs: build-and-push
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Deploy to K3s
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
-          command_timeout: 15m
-          script: |
-            set -e
-            cd /home/deploy-admin/New-Feed-MicroServices
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-            echo "==> Pulling latest manifests"
-            git pull origin main
+      - name: Update image tags in manifests
+        run: |
+          set -e
+          for svc in api-gateway auth-service post-service comment-service media-service notification-service; do
+            sed -i "s|image: ghcr.io/tranloi2k/new-feed-microservices-$svc:.*|image: ghcr.io/tranloi2k/new-feed-microservices-$svc:${{ github.sha }}|g" "k8s/$svc.yaml"
+            echo "Updated k8s/$svc.yaml"
+          done
 
-            echo "==> Applying manifests"
-            kubectl apply -f k8s/
+      - name: Show diff
+        run: git diff k8s/ || true
 
-            echo "==> Updating images to ${{ github.sha }}"
-            for svc in api-gateway auth-service post-service comment-service media-service notification-service; do
-              kubectl set image deployment/$svc \
-                $svc=ghcr.io/tranloi2k/new-feed-microservices-$svc:${{ github.sha }} \
-                -n newfeed
-            done
-
-            echo "==> Waiting for rollout"
-            for svc in api-gateway auth-service post-service comment-service media-service notification-service; do
-              kubectl rollout status deployment/$svc -n newfeed --timeout=180s
-            done
-
-            echo "==> Current state"
-            kubectl get pods -n newfeed
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/
+          if git diff --staged --quiet; then
+            echo "No manifest changes to commit"
+          else
+            git commit -m "chore: update image tags to ${{ github.sha }} [skip ci]"
+            git push
+          fi
