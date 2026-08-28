@@ -2,8 +2,8 @@ services:
   # API Gateway
   api-gateway:
     image: ghcr.io/tranloi2k/new-feed-microservices-api-gateway:${IMAGE_TAG:?Set IMAGE_TAG to a full Git commit SHA}
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
       - NODE_ENV=${NODE_ENV}
       - PORT=8080
@@ -207,6 +207,27 @@ services:
       - rabbitmq-data:/var/lib/rabbitmq
     networks:
       - microservices-network
+
+    nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
 networks:
   microservices-network:
