@@ -129,9 +129,6 @@ microservices/
 │   └── index.js
 │
 ├── docker-compose.yml        # Production orchestration
-├── install-all.sh/bat        # Install dependencies
-├── migrate-all.sh/bat        # Run migrations
-├── start.sh/bat              # Start all services
 ├── GETTING_STARTED.md        # Setup guide
 ├── API_DOCUMENTATION.md      # API reference
 ├── DEPLOYMENT.md             # Production deployment
@@ -217,13 +214,22 @@ docker-compose up -d --scale comment-service=3
 ### Local Development Setup
 
 ```bash
-# 1. Install dependencies for all services
-./install-all.sh  # or install-all.bat on Windows
+# 1. Cài dependency (cùng lệnh trên Windows, Linux và macOS)
+npm install --prefix shared
+npm install --prefix api-gateway
+npm install --prefix auth-service
+npm install --prefix post-service
+npm install --prefix comment-service
+npm install --prefix media-service
+npm install --prefix notification-service
 
 # 2. Configure .env files with localhost URLs
 
-# 3. Run database migrations
-./migrate-all.sh  # or migrate-all.bat on Windows
+# 3. Chạy migration cho các service sở hữu database
+npm run migrate --prefix auth-service
+npm run migrate --prefix post-service
+npm run migrate --prefix comment-service
+npm run migrate --prefix notification-service
 
 # 4. Start services (in separate terminals)
 cd api-gateway && npm run dev
