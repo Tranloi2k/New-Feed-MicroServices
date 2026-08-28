@@ -24,6 +24,7 @@ services:
       - media-service
     networks:
       - microservices-network
+    restart: unless-stopped
 
   # Auth Service
   auth-service:
@@ -48,6 +49,7 @@ services:
       - redis
     networks:
       - microservices-network
+    restart: unless-stopped
 
   # Post Service
   post-service:
@@ -69,6 +71,7 @@ services:
       - redis
     networks:
       - microservices-network
+    restart: unless-stopped
 
   # Comment Service
   comment-service:
@@ -80,7 +83,7 @@ services:
       - PORT=3004
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-comment:5432/comment_db
       - AUTH_SERVICE_URL=http://auth-service:3001
-      - POST_SERVICE_URL=http://post-service:3002  
+      - POST_SERVICE_URL=http://post-service:3002
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - SERVICE_SECRET=${SERVICE_SECRET}
       - CLIENT_URL=${CLIENT_URL}
@@ -94,6 +97,7 @@ services:
       - redis
     networks:
       - microservices-network
+    restart: unless-stopped
 
   # Media Service
   media-service:
@@ -110,6 +114,7 @@ services:
       - CLIENT_URL=${CLIENT_URL}
     networks:
       - microservices-network
+    restart: unless-stopped
 
   # Notification Service
   notification-service:
@@ -129,19 +134,7 @@ services:
       - rabbitmq
     networks:
       - microservices-network
-
-  postgres-notification:
-    image: postgres:14-alpine
-    environment:
-      POSTGRES_DB: notification_db
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - notification-db-data:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5436:5432"
-    networks:
-      - microservices-network
+    restart: unless-stopped
 
   # Databases
   postgres-auth:
@@ -156,6 +149,7 @@ services:
       - "127.0.0.1:5433:5432"
     networks:
       - microservices-network
+    restart: unless-stopped
 
   postgres-post:
     image: postgres:14-alpine
@@ -169,6 +163,7 @@ services:
       - "127.0.0.1:5434:5432"
     networks:
       - microservices-network
+    restart: unless-stopped
 
   postgres-comment:
     image: postgres:14-alpine
@@ -182,6 +177,21 @@ services:
       - "127.0.0.1:5435:5432"
     networks:
       - microservices-network
+    restart: unless-stopped
+
+  postgres-notification:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5436:5432"
+    networks:
+      - microservices-network
+    restart: unless-stopped
 
   # Redis
   redis:
@@ -193,6 +203,7 @@ services:
     command: redis-server --appendonly yes
     networks:
       - microservices-network
+    restart: unless-stopped
 
   # RabbitMQ
   rabbitmq:
@@ -207,8 +218,10 @@ services:
       - rabbitmq-data:/var/lib/rabbitmq
     networks:
       - microservices-network
+    restart: unless-stopped
 
-    nginx:
+  # Nginx reverse proxy
+  nginx:
     image: nginx:alpine
     container_name: nginx
     ports:
@@ -220,8 +233,11 @@ services:
       - ./certbot/www:/var/www/certbot
     depends_on:
       - api-gateway
+    networks:
+      - microservices-network
     restart: unless-stopped
 
+  # Certbot for SSL certificate renewal
   certbot:
     image: certbot/certbot
     volumes:
