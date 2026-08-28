@@ -47,10 +47,10 @@ jobs:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 169.58.249.13
+          host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
+          port: ${{ secrets.VPS_PORT }}
           script: |
             cd /home/deploy-admin/New-Feed-MicroServices
             export IMAGE_TAG=${{ github.sha }}
