@@ -10,17 +10,7 @@ import {
   getFollowingIdsInternal,
 } from "../controllers/profileController.js";
 import { requireUser, optionalViewer } from "../middleware/requireUser.js";
-
-function authenticateService(req, res, next) {
-  const token = req.headers["x-service-token"];
-  if (!token || token !== process.env.SERVICE_SECRET) {
-    return res.status(403).json({
-      success: false,
-      message: "Unauthorized service call",
-    });
-  }
-  next();
-}
+import { requireServiceAuth } from "../middleware/serviceAuth.js";
 
 const router = express.Router();
 
@@ -34,7 +24,7 @@ router.delete("/:id/follow", requireUser, unfollowUserHandler);
 
 router.get(
   "/internal/:id/following-ids",
-  authenticateService,
+  requireServiceAuth,
   getFollowingIdsInternal
 );
 

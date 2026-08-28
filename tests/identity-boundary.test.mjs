@@ -6,6 +6,10 @@ import {
   stripUntrustedIdentityHeaders,
 } from "../api-gateway/src/utils/proxyHelpers.js";
 import { getTrustedIdentity as getAuthIdentity } from "../auth-service/src/middleware/trustedIdentity.js";
+import {
+  isServiceTokenValid,
+  requireServiceAuth,
+} from "../auth-service/src/middleware/serviceAuth.js";
 import { getTrustedIdentity as getPostIdentity } from "../post-service/src/middleware/trustedIdentity.js";
 import { getTrustedIdentity as getCommentIdentity } from "../comment-service/src/middleware/trustedIdentity.js";
 import { getTrustedIdentity as getNotificationIdentity } from "../notification-service/src/middleware/trustedIdentity.js";
@@ -17,6 +21,60 @@ const identityReaders = [
   ["comment", getCommentIdentity],
   ["notification", getNotificationIdentity],
 ];
+
+test("auth internal APIs require the shared service credential", () => {
+  assert.equal(isServiceTokenValid(undefined, SERVICE_SECRET), false);
+  assert.equal(isServiceTokenValid("wrong-secret", SERVICE_SECRET), false);
+  assert.equal(isServiceTokenValid(SERVICE_SECRET, SERVICE_SECRET), true);
+
+  for (const token of [undefined, "wrong-secret"]) {
+    let nextCalled = false;
+    const response = {
+      statusCode: 200,
+      payload: null,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload) {
+        this.payload = payload;
+        return this;
+      },
+    };
+
+    requireServiceAuth(
+      { headers: { ...(token && { "x-service-token": token }) } },
+      response,
+      () => {
+        nextCalled = true;
+      }
+    );
+
+    assert.equal(nextCalled, false);
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.payload.success, false);
+  }
+});
+
+test("auth internal APIs accept the configured service credential", () => {
+  const previousSecret = process.env.SERVICE_SECRET;
+  process.env.SERVICE_SECRET = SERVICE_SECRET;
+  let nextCalled = false;
+
+  try {
+    requireServiceAuth(
+      { headers: { "x-service-token": SERVICE_SECRET } },
+      {},
+      () => {
+        nextCalled = true;
+      }
+    );
+    assert.equal(nextCalled, true);
+  } finally {
+    if (previousSecret === undefined) delete process.env.SERVICE_SECRET;
+    else process.env.SERVICE_SECRET = previousSecret;
+  }
+});
 
 function createProxyRequest(initialHeaders = {}) {
   const headers = new Map(
@@ -152,4 +210,3 @@ for (const [serviceName, readIdentity] of identityReaders) {
     );
   });
 }
-

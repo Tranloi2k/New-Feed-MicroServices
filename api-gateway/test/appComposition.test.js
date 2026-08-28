@@ -62,8 +62,14 @@ test("app composition keeps public auth allowlisted and internal auth private", 
       user: null,
     });
 
-    const internal = await fetch(`${origin}/api/auth/internal/users/1`);
-    assert.equal(internal.status, 404);
+    for (const [method, path] of [
+      ["GET", "/api/auth/internal/users/1"],
+      ["POST", "/api/auth/internal/users/1"],
+      ["GET", "/api/auth/internal/anything?debug=true"],
+    ]) {
+      const internal = await fetch(`${origin}${path}`, { method });
+      assert.equal(internal.status, 404, `${method} ${path}`);
+    }
   } finally {
     await close(server);
   }
@@ -114,4 +120,3 @@ test("app composition strips forged identity and preserves protected JSON routes
     else process.env.JWT_SECRET = previousSecret;
   }
 });
-

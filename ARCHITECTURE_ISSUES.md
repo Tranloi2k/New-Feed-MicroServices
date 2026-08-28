@@ -66,19 +66,21 @@ Trong Docker Compose, Notification Service đang expose port `3005` ra mọi int
 
 **Mức độ:** P0
 
-Gateway proxy toàn bộ prefix `/api/auth`:
+**Trạng thái:** Đã xử lý ngày 2026-08-28. Gateway chỉ proxy allowlist các auth action public và `/me`; mọi `/api/auth/internal/*` trả `404`. Các internal route của Auth Service đồng thời bắt buộc `X-Service-Token` qua middleware dùng so sánh constant-time, và payload lookup nội bộ chỉ còn các trường identity/profile cần cho consumer. Regression tests nằm tại `api-gateway/test/appComposition.test.js` và `tests/identity-boundary.test.mjs`.
+
+**Nguyên nhân ban đầu (đã loại bỏ):** Gateway từng proxy toàn bộ prefix `/api/auth`:
 
 - `api-gateway/src/app.js:230-238`
 
-Do đó client có thể gọi `/api/auth/internal/users/:id`, được rewrite thành internal endpoint của Auth Service. Route này không có service-auth middleware:
+Do đó client từng có thể gọi `/api/auth/internal/users/:id`, được rewrite thành internal endpoint của Auth Service. Route này khi đó chưa có service-auth middleware:
 
 - `auth-service/src/routes/authRoutes.js:22-23`
 
-Response chứa các trường như email và trạng thái private:
+Response trước đây chứa cả các trường không cần thiết như trạng thái private:
 
 - `auth-service/src/controllers/authController.js:303-345`
 
-**Khuyến nghị:**
+**Biện pháp đã áp dụng:**
 
 - Gateway từ chối mọi path `/internal/*` từ public ingress.
 - Tách public router và internal router.

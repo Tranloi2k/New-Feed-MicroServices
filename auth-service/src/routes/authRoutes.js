@@ -8,6 +8,7 @@ import {
   validateToken
 } from "../controllers/authController.js";
 import { requireUser } from "../middleware/requireUser.js";
+import { requireServiceAuth } from "../middleware/serviceAuth.js";
 
 const router = express.Router();
 
@@ -21,6 +22,6 @@ router.post("/validate-token", validateToken)
 router.get("/me", requireUser, getCurrentUser);
 
 // Internal routes (service-to-service)
-router.get("/internal/users/:id", getUserById);
+router.get("/internal/users/:id", requireServiceAuth, getUserById);
 
 export default router;

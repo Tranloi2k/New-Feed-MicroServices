@@ -331,9 +331,17 @@ export async function getUserById(req, res) {
       });
     }
 
+    const internalUser = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
+    };
+
     res.json({
       success: true,
-      data: user,
+      data: internalUser,
     });
   } catch (error) {
     console.error("Get user by ID error:", error);
