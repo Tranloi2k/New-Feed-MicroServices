@@ -24,7 +24,7 @@ function buildContextFromHeaders(headers = {}) {
 }
 import commentRoutes from "./routes/commentRoutes.js";
 import { initEventListener } from "./services/eventListener.js";
-import { initEventPublisher } from "./services/eventPublisher.js";
+import { initOutboxPublisher } from "./services/eventPublisher.js";
 import { createRedisClient } from "./config/redis.js";
 import { closePubSub } from "./config/pubsub.js";
 import { authenToken } from './services/userService.js'
@@ -180,7 +180,7 @@ async function startServer() {
   httpServer.listen(PORT, () => {
     // Initialize event systems
     initEventListener();
-    initEventPublisher();
+    initOutboxPublisher();
   });
 
   // Graceful shutdown

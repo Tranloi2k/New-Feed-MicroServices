@@ -1,5 +1,5 @@
 import prisma from "../lib/prisma.js";
-import { publishEvent } from "../services/eventPublisher.js";
+import { enqueueEvent } from "../services/eventPublisher.js";
 import { getFollowingIds } from "../services/userService.js";
 import cacheService from "../services/cacheService.js";
 
@@ -176,20 +176,21 @@ const resolvers = {
       }
 
       try {
-        const post = await prisma.post.create({
-          data: {
-            userId: context.user.userId,
-            content: content || null,
-            postType: postType.toLowerCase(),
-            mediaUrls: mediaUrls && mediaUrls.length > 0 ? mediaUrls : null,
-            location: location || null,
-          },
-        });
-
-        await publishEvent("post.created", {
-          postId: post.id,
-          userId: post.userId,
-          timestamp: new Date().toISOString(),
+        const post = await prisma.$transaction(async (tx) => {
+          const created = await tx.post.create({
+            data: {
+              userId: context.user.userId,
+              content: content || null,
+              postType: postType.toLowerCase(),
+              mediaUrls: mediaUrls && mediaUrls.length > 0 ? mediaUrls : null,
+              location: location || null,
+            },
+          });
+          await enqueueEvent(tx, "post.created", {
+            postId: created.id,
+            userId: created.userId,
+          });
+          return created;
         });
 
         await cacheService.invalidateAllNewsFeeds();
@@ -235,17 +236,15 @@ const resolvers = {
           };
         }
 
-        await prisma.post.delete({
-          where: { id },
+        await prisma.$transaction(async (tx) => {
+          await tx.post.delete({ where: { id } });
+          await enqueueEvent(tx, "post.deleted", {
+            postId: id,
+            userId: post.userId,
+          });
         });
 
         await cacheService.invalidatePost(id);
-
-        await publishEvent("post.deleted", {
-          postId: id,
-          userId: post.userId,
-          timestamp: new Date().toISOString(),
-        });
 
         return {
           success: true,

@@ -9,6 +9,7 @@ import resolvers from "./graphql/resolvers.js";
 import { createUserLoader } from "./graphql/loaders/userLoader.js";
 import { createRedisClient } from "./config/redis.js";
 import { getTrustedIdentity } from "./middleware/trustedIdentity.js";
+import { initOutboxPublisher } from "./services/eventPublisher.js";
 
 function buildContext(req) {
   return {
@@ -41,6 +42,7 @@ const apolloServer = new ApolloServer({
 
 async function startServer() {
   await apolloServer.start();
+  initOutboxPublisher();
 
   // Apollo v4 uses expressMiddleware instead of applyMiddleware
   app.use(

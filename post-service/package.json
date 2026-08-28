@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "nodemon src/app.js",
     "start": "node src/app.js",
+    "test": "node --test test/*.test.js",
     "seed:demo-posts": "node scripts/seed-demo-posts.mjs",
     "migrate": "prisma migrate dev",
     "generate": "prisma generate"

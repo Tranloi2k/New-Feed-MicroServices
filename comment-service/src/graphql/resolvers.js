@@ -1,5 +1,5 @@
 import prisma from "../lib/prisma.js";
-import { publishEvent } from "../services/eventPublisher.js";
+import { enqueueEvent } from "../services/eventPublisher.js";
 import cacheService from "../services/cacheService.js";
 import pubsub, { COMMENT_EVENTS } from "../config/pubsub.js";
 import { withFilter } from "graphql-subscriptions";
@@ -97,13 +97,27 @@ const resolvers = {
       }
 
       try {
-        const comment = await prisma.comment.create({
-          data: {
+        const comment = await prisma.$transaction(async (tx) => {
+          const created = await tx.comment.create({
+            data: {
+              postId,
+              userId: context.user.userId,
+              content: content.trim(),
+              parentCommentId: parentCommentId || null,
+            },
+          });
+          await enqueueEvent(tx, "comment.created", {
+            comment: {
+              ...created,
+              authorId: created.userId,
+              authorName: context.user.email,
+              createdAt: created.createdAt.toISOString(),
+              updatedAt: created.updatedAt.toISOString(),
+            },
             postId,
-            userId: context.user.userId,
-            content: content.trim(),
-            parentCommentId: parentCommentId || null,
-          },
+            postAuthorId: null,
+          });
+          return created;
         });
 
         await cacheService.invalidatePostComments(postId);
@@ -116,18 +130,6 @@ const resolvers = {
           ...formatComment(comment),
           replies: [],
         };
-
-        await publishEvent("comment.created", {
-          comment: {
-            ...comment,
-            authorId: comment.userId,
-            authorName: context.user.email,
-            createdAt: comment.createdAt.toISOString(),
-            updatedAt: comment.updatedAt.toISOString(),
-          },
-          postId,
-          postAuthorId: null,
-        });
 
         await pubsub.publish(COMMENT_EVENTS.COMMENT_ADDED, {
           commentAdded: commentPayload,
@@ -180,12 +182,13 @@ const resolvers = {
           select: { id: true },
         });
 
-        await prisma.comment.deleteMany({
-          where: { parentCommentId: id },
-        });
-
-        await prisma.comment.delete({
-          where: { id },
+        await prisma.$transaction(async (tx) => {
+          await tx.comment.deleteMany({ where: { parentCommentId: id } });
+          await tx.comment.delete({ where: { id } });
+          await enqueueEvent(tx, "comment.deleted", {
+            commentId: id,
+            postId: comment.postId,
+          });
         });
 
         await cacheService.invalidatePostComments(comment.postId);
@@ -195,11 +198,6 @@ const resolvers = {
             repliesToDelete.map((r) => r.id)
           );
         }
-
-        await publishEvent("comment.deleted", {
-          commentId: id,
-          postId: comment.postId,
-        });
 
         await pubsub.publish(COMMENT_EVENTS.COMMENT_DELETED, {
           commentDeleted: id,
