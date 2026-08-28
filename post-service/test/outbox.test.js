@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { enqueueEvent } from "../src/services/eventPublisher.js";
+import { requireServiceAuth } from "../src/middleware/serviceAuth.js";
 
 test("enqueueEvent writes an event through the caller transaction", async () => {
   let data;
@@ -20,4 +21,22 @@ test("enqueueEvent writes an event through the caller transaction", async () => 
     payload: { postId: 42 },
     correlationId: "request-1",
   });
+});
+
+test("internal post API rejects an empty service secret", () => {
+  const previous = process.env.SERVICE_SECRET;
+  process.env.SERVICE_SECRET = "";
+  let status;
+  const req = { headers: { "x-service-token": "" } };
+  const res = {
+    status(value) { status = value; return this; },
+    json() {},
+  };
+  let called = false;
+  requireServiceAuth(req, res, () => { called = true; });
+  if (previous === undefined) delete process.env.SERVICE_SECRET;
+  else process.env.SERVICE_SECRET = previous;
+
+  assert.equal(status, 403);
+  assert.equal(called, false);
 });

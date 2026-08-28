@@ -54,6 +54,14 @@ export async function getFollowingIds(userId) {
   return rows.map((r) => r.followingId);
 }
 
+export async function getFollowerIds(userId) {
+  const rows = await prisma.follow.findMany({
+    where: { followingId: userId },
+    select: { followerId: true },
+  });
+  return rows.map((row) => row.followerId);
+}
+
 export async function listFollowers(userId, { limit = 20, cursor }) {
   const take = Math.min(Math.max(limit, 1), 50);
   const skip = cursor ? parseInt(cursor, 10) : 0;

@@ -1,6 +1,7 @@
 import amqp from "amqplib";
 import prisma from "../lib/prisma.js";
 import { createNotification } from "./notificationStore.js";
+import { getFollowerIds } from "./recipientResolver.js";
 
 const QUEUE = "notification-service.events.v1";
 const DEAD_LETTER_EXCHANGE = "events.dlx";
@@ -69,10 +70,48 @@ async function buildActions(tx, event) {
   return actions;
 }
 
-export async function processEventOnce(io, event, db = prisma) {
-  if (!event?.eventId || !event?.eventType || event.version !== 1) {
+export function validateEventContract(event) {
+  if (!event?.eventId || !event?.eventType || event.version !== 1 || !event.data) {
     throw new Error("Invalid or unsupported event envelope");
   }
+  const positiveId = (value) => Number.isSafeInteger(value) && value > 0;
+  if (event.eventType === "post.created" && (!positiveId(event.data.postId) || !positiveId(event.data.userId))) {
+    throw new Error("Invalid post.created contract");
+  }
+  if (
+    event.eventType === "comment.created" &&
+    (!positiveId(event.data.postId) ||
+      !positiveId(event.data.postAuthorId) ||
+      !positiveId(event.data.comment?.id) ||
+      !positiveId(event.data.comment?.authorId))
+  ) {
+    throw new Error("Invalid comment.created contract");
+  }
+}
+
+export async function processEventOnce(
+  io,
+  event,
+  db = prisma,
+  { resolveFollowerIds = getFollowerIds } = {}
+) {
+  validateEventContract(event);
+
+  const alreadyProcessed = await db.processedEvent.findUnique({
+    where: { eventId: event.eventId },
+  });
+  if (alreadyProcessed) return false;
+
+  const enrichedEvent =
+    event.eventType === "post.created"
+      ? {
+          ...event,
+          data: {
+            ...event.data,
+            followers: await resolveFollowerIds(event.data.userId),
+          },
+        }
+      : event;
 
   let actions;
   try {
@@ -82,7 +121,7 @@ export async function processEventOnce(io, event, db = prisma) {
       });
       if (processed) return null;
 
-      const pendingActions = await buildActions(tx, event);
+      const pendingActions = await buildActions(tx, enrichedEvent);
       await tx.processedEvent.create({
         data: { eventId: event.eventId, eventType: event.eventType },
       });

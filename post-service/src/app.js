@@ -10,6 +10,8 @@ import { createUserLoader } from "./graphql/loaders/userLoader.js";
 import { createRedisClient } from "./config/redis.js";
 import { getTrustedIdentity } from "./middleware/trustedIdentity.js";
 import { initOutboxPublisher } from "./services/eventPublisher.js";
+import { requireServiceAuth } from "./middleware/serviceAuth.js";
+import prisma from "./lib/prisma.js";
 
 function buildContext(req) {
   return {
@@ -43,6 +45,25 @@ const apolloServer = new ApolloServer({
 async function startServer() {
   await apolloServer.start();
   initOutboxPublisher();
+
+  app.get("/internal/posts/:id", requireServiceAuth, async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id) || id <= 0) {
+        return res.status(400).json({ success: false, message: "Invalid post id" });
+      }
+      const post = await prisma.post.findUnique({
+        where: { id },
+        select: { id: true, userId: true, isHidden: true },
+      });
+      if (!post || post.isHidden) {
+        return res.status(404).json({ success: false, message: "Post not found" });
+      }
+      return res.json({ success: true, data: { id: post.id, userId: post.userId } });
+    } catch (error) {
+      return next(error);
+    }
+  });
 
   // Apollo v4 uses expressMiddleware instead of applyMiddleware
   app.use(

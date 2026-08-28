@@ -91,6 +91,8 @@ Response trước đây chứa cả các trường không cần thiết như tr�
 
 **Mức độ:** P1
 
+**Trạng thái:** Đã xử lý. Producer dùng transactional outbox và publisher confirm; consumer dùng durable queue, retry/DLQ và inbox idempotency theo `eventId`. Delivery là at-least-once, side effect trong database được khử trùng.
+
 Post và Comment ghi database trước rồi mới publish event, không có transactional outbox. Publisher bỏ qua hoặc nuốt lỗi khi RabbitMQ không hoạt động:
 
 - `post-service/src/graphql/resolvers.js:179-195`
@@ -123,6 +125,8 @@ Hệ quả:
 
 **Mức độ:** P1
 
+**Trạng thái:** Đã xử lý cho notification bài viết mới và comment mới.
+
 Post Service phát `post.created` chỉ gồm `postId`, `userId`:
 
 - `post-service/src/graphql/resolvers.js:189-193`
@@ -149,6 +153,16 @@ Ngoài ra `Post.commentCount`, `likeCount` và `shareCount` là dữ liệu deno
 - Viết consumer-driven contract tests.
 - Để Notification Service resolve recipient từ local projection hoặc service chuyên trách; tránh nhét danh sách follower lớn vào event.
 - Xác định rõ service sở hữu các counter và cơ chế cập nhật/rebuild chúng.
+
+**Biện pháp đã áp dụng:**
+
+- Chuẩn hóa envelope version 1 và validate các field bắt buộc trước khi consumer xử lý.
+- `post.created` giữ payload nhỏ `{ postId, userId }`; Notification Service resolve follower qua internal Auth API được bảo vệ bằng service token.
+- Comment Service tra cứu Post Service qua internal API trước khi ghi comment, rồi phát `comment.created` với `postAuthorId` thực.
+- Event không đúng contract được retry có giới hạn rồi chuyển sang DLQ thay vì bị xử lý âm thầm.
+- Thêm contract test cho `post.created`, `comment.created` và kiểm tra idempotency khi redelivery.
+
+Phần counter denormalized (`commentCount`, `likeCount`, `shareCount`) vẫn cần một thiết kế ownership/rebuild riêng; không thuộc phạm vi notification contract của bản sửa này.
 
 ### ARCH-05 — Không đảm bảo invariant giữa Post và Comment
 

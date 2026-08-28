@@ -3,6 +3,7 @@ import { enqueueEvent } from "../services/eventPublisher.js";
 import cacheService from "../services/cacheService.js";
 import pubsub, { COMMENT_EVENTS } from "../config/pubsub.js";
 import { withFilter } from "graphql-subscriptions";
+import { getPostIdentity } from "../services/postService.js";
 
 function formatComment(comment) {
   return {
@@ -97,6 +98,7 @@ const resolvers = {
       }
 
       try {
+        const post = await getPostIdentity(postId);
         const comment = await prisma.$transaction(async (tx) => {
           const created = await tx.comment.create({
             data: {
@@ -115,7 +117,7 @@ const resolvers = {
               updatedAt: created.updatedAt.toISOString(),
             },
             postId,
-            postAuthorId: null,
+            postAuthorId: post.userId,
           });
           return created;
         });

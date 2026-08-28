@@ -7,6 +7,7 @@ import {
   listFollowers,
   listFollowing,
   getFollowingIds,
+  getFollowerIds,
 } from "../services/followService.js";
 import { invalidateUser } from "../services/cacheService.js";
 
@@ -226,6 +227,23 @@ export async function getFollowingIdsInternal(req, res) {
     res.status(500).json({
       success: false,
       message: "Failed to load following ids",
+    });
+  }
+}
+
+export async function getFollowerIdsInternal(req, res) {
+  try {
+    const userId = Number(req.params.id);
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid user id" });
+    }
+    const ids = await getFollowerIds(userId);
+    res.json({ success: true, data: { ids } });
+  } catch (error) {
+    console.error("Get follower ids error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load follower ids",
     });
   }
 }

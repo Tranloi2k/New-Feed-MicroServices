@@ -8,6 +8,7 @@ import {
   getUserFollowers,
   getUserFollowing,
   getFollowingIdsInternal,
+  getFollowerIdsInternal,
 } from "../controllers/profileController.js";
 import { requireUser, optionalViewer } from "../middleware/requireUser.js";
 import { requireServiceAuth } from "../middleware/serviceAuth.js";
@@ -26,6 +27,11 @@ router.get(
   "/internal/:id/following-ids",
   requireServiceAuth,
   getFollowingIdsInternal
+);
+router.get(
+  "/internal/:id/follower-ids",
+  requireServiceAuth,
+  getFollowerIdsInternal
 );
 
 export default router;

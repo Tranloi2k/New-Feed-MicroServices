@@ -95,6 +95,7 @@ services:
       - postgres-comment
       - rabbitmq
       - redis
+      - post-service
     networks:
       - microservices-network
     restart: unless-stopped
@@ -129,9 +130,11 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - SERVICE_SECRET=${SERVICE_SECRET}
       - CLIENT_URL=${CLIENT_URL}
+      - AUTH_SERVICE_URL=http://auth-service:3001
     depends_on:
       - postgres-notification
       - rabbitmq
+      - auth-service
     networks:
       - microservices-network
     restart: unless-stopped
