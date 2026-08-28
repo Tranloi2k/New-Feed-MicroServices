@@ -165,6 +165,7 @@ cd microservices
 cp .env.example .env
 
 # Configure important secrets in .env:
+# - IMAGE_TAG (full Git commit SHA đã được CI publish)
 # - JWT_SECRET
 # - SERVICE_SECRET  
 # - CLOUDINARY credentials
@@ -181,6 +182,10 @@ curl http://localhost:8080/api/media/health
 # 5. View logs
 docker-compose logs -f
 ```
+
+Các application service được pull từ GHCR bằng `IMAGE_TAG` bất biến.
+Để rollback, đặt `IMAGE_TAG` về commit SHA đã publish trước đó rồi chạy lại
+`docker compose pull && docker compose up -d`.
 
 **Services will run at:**
 - **API Gateway:** http://localhost:8080

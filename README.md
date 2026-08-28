@@ -174,6 +174,7 @@ cd microservices
 cp .env.example .env
 
 # Configure important secrets in .env:
+# - IMAGE_TAG (full Git commit SHA published by CI)
 # - JWT_SECRET
 # - SERVICE_SECRET  
 # - CLOUDINARY credentials
@@ -190,6 +191,10 @@ curl http://localhost:8080/api/media/health
 # 5. View logs
 docker-compose logs -f
 ```
+
+Application services are pulled from GHCR using the immutable `IMAGE_TAG`.
+To roll back, set `IMAGE_TAG` to an earlier published commit SHA and run
+`docker compose pull && docker compose up -d` again.
 
 **Services will run at:**
 - **API Gateway:** http://localhost:8080

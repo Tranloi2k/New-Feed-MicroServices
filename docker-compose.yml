@@ -1,7 +1,7 @@
 services:
   # API Gateway
   api-gateway:
-    build: ./api-gateway
+    image: ghcr.io/tranloi2k/new-feed-microservices-api-gateway:${IMAGE_TAG:?Set IMAGE_TAG to a full Git commit SHA}
     ports:
       - "8080:8080"
     environment:
@@ -27,7 +27,7 @@ services:
 
   # Auth Service
   auth-service:
-    build: ./auth-service
+    image: ghcr.io/tranloi2k/new-feed-microservices-auth-service:${IMAGE_TAG:?Set IMAGE_TAG to a full Git commit SHA}
     ports:
       - "127.0.0.1:3001:3001"
     environment:
@@ -51,7 +51,7 @@ services:
 
   # Post Service
   post-service:
-    build: ./post-service
+    image: ghcr.io/tranloi2k/new-feed-microservices-post-service:${IMAGE_TAG:?Set IMAGE_TAG to a full Git commit SHA}
     ports:
       - "127.0.0.1:3002:3002"
     environment:
@@ -72,7 +72,7 @@ services:
 
   # Comment Service
   comment-service:
-    build: ./comment-service
+    image: ghcr.io/tranloi2k/new-feed-microservices-comment-service:${IMAGE_TAG:?Set IMAGE_TAG to a full Git commit SHA}
     ports:
       - "127.0.0.1:3004:3004"
     environment:
@@ -97,7 +97,7 @@ services:
 
   # Media Service
   media-service:
-    build: ./media-service
+    image: ghcr.io/tranloi2k/new-feed-microservices-media-service:${IMAGE_TAG:?Set IMAGE_TAG to a full Git commit SHA}
     ports:
       - "127.0.0.1:3003:3003"
     environment:
@@ -113,7 +113,7 @@ services:
 
   # Notification Service
   notification-service:
-    build: ./notification-service
+    image: ghcr.io/tranloi2k/new-feed-microservices-notification-service:${IMAGE_TAG:?Set IMAGE_TAG to a full Git commit SHA}
     ports:
       - "127.0.0.1:3005:3005"
     environment:
