@@ -20,15 +20,17 @@ prometheus:
 grafana:
   resources:
     requests:
-      memory: 128Mi
-      cpu: 50m
+      memory: 96Mi
     limits:
-      memory: 384Mi
-      cpu: 300m
-  persistence:
-    enabled: true
-    storageClassName: local-path
-    size: 2Gi
+      memory: 200Mi
+  sidecar:
+    dashboards:
+      enabled: true
+    resources:
+      limits:
+        memory: 64Mi
+    # tắt sidecar datasource nếu chỉ dùng Prometheus mặc định
+  plugins: []
 
 alertmanager:
   enabled: false
