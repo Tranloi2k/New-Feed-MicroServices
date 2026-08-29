@@ -68,6 +68,7 @@ jobs:
             echo "Updated k8s/$svc.yaml"
           done
           sed -i "s|image: ghcr.io/tranloi2k/new-feed-microservices-auth-service-migrate:.*|image: ghcr.io/tranloi2k/new-feed-microservices-auth-service-migrate:${{ github.sha }}|g" "k8s/auth-service.yaml"
+          sed -i "s|image: ghcr.io/tranloi2k/new-feed-microservices-auth-service-migrate:.*|image: ghcr.io/tranloi2k/new-feed-microservices-auth-service-migrate:${{ github.sha }}|g" "k8s/auth-session-cleanup.yaml"
 
       - name: Show diff
         run: git diff k8s/ || true

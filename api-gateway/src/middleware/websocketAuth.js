@@ -10,20 +10,6 @@ function parseCookies(cookieHeader = "") {
   }, {});
 }
 
-function extractTokenFromUrl(url = "") {
-  try {
-    const search = url.includes("?") ? url.slice(url.indexOf("?")) : "";
-    const params = new URLSearchParams(search);
-    return (
-      params.get("access_token") ||
-      params.get("token") ||
-      params.get("Authorization")?.replace(/^Bearer\s+/i, "")
-    );
-  } catch {
-    return null;
-  }
-}
-
 function redactUrl(url = "") {
   try {
     const parsed = new URL(url, "http://gateway.local");
@@ -36,16 +22,12 @@ function redactUrl(url = "") {
   }
 }
 
-/**
- * Authenticate raw HTTP upgrade requests (WebSocket).
- * Sets req.user when valid; returns false and destroys socket when invalid.
- */
-export function authenticateUpgrade(req, socket) {
+/** Authenticate a WebSocket HTTP Upgrade request before it is proxied. */
+export function authenticateWebSocketUpgrade(req, socket) {
   const cookies = parseCookies(req.headers.cookie);
   const token =
     cookies.access_token ||
-    req.headers.authorization?.replace(/^Bearer\s+/i, "") ||
-    extractTokenFromUrl(req.url);
+    req.headers.authorization?.replace(/^Bearer\s+/i, "");
 
   if (!token) {
     logger.warn(`[WS Auth] Rejected upgrade: missing token (${redactUrl(req.url)})`);

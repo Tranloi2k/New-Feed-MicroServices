@@ -15,7 +15,7 @@ import {
 } from "./config/redis.js";
 import { createServiceProxies } from "./proxy/serviceProxies.js";
 import { logger } from "./utils/logger.js";
-import { attachWebSocketUpgradeHandler } from "./websocket/upgradeHandler.js";
+import { attachWebSocketRouter } from "./websocket/websocketRouter.js";
 
 export function createGatewayRuntime({ port = process.env.PORT || 8080 } = {}) {
   validateEnv();
@@ -35,7 +35,7 @@ export function createGatewayRuntime({ port = process.env.PORT || 8080 } = {}) {
     activeSockets.add(socket);
     socket.once("close", () => activeSockets.delete(socket));
   });
-  attachWebSocketUpgradeHandler(httpServer, proxies);
+  attachWebSocketRouter(httpServer, proxies);
 
   async function start() {
     await new Promise((resolveStart, rejectStart) => {

@@ -1,4 +1,5 @@
 import Redis from "ioredis";
+import { logger } from "../utils/logger.js";
 
 let redisClient = null;
 
@@ -14,7 +15,7 @@ export function createRedisClient() {
     const redisUrl = process.env.REDIS_URL;
 
     if (!redisUrl) {
-        console.warn("⚠️ REDIS_URL not configured, caching disabled");
+        logger.warn("redis.disabled");
         return null;
     }
 
@@ -30,15 +31,15 @@ export function createRedisClient() {
     });
 
     redisClient.on("connect", () => {
-        console.log("✅ Redis connected for Auth Service caching");
+        logger.info("redis.connected");
     });
 
     redisClient.on("error", (err) => {
-        console.error("❌ Redis connection error:", err);
+        logger.error("redis.error", { error: err });
     });
 
     redisClient.on("close", () => {
-        console.warn("⚠️ Redis connection closed");
+        logger.warn("redis.closed");
     });
 
     return redisClient;
@@ -61,7 +62,7 @@ export async function closeRedisConnection() {
     if (redisClient) {
         await redisClient.quit();
         redisClient = null;
-        console.log("Redis connection closed");
+        logger.info("redis.disconnected");
     }
 }
 

@@ -16,7 +16,7 @@ FROM build AS test
 CMD ["npm", "test"]
 
 FROM build AS migration
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run seed:demo"]
+CMD ["npx", "prisma", "migrate", "deploy"]
 
 FROM node:24-alpine AS production-dependencies
 

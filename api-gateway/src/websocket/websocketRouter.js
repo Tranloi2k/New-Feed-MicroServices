@@ -1,6 +1,6 @@
-import { authenticateUpgrade } from "../middleware/upgradeAuth.js";
+import { authenticateWebSocketUpgrade } from "../middleware/websocketAuth.js";
 
-export function getWebSocketTarget(pathname) {
+export function resolveWebSocketTarget(pathname) {
   if (
     pathname === "/notifications/socket.io" ||
     pathname.startsWith("/notifications/socket.io/")
@@ -11,10 +11,10 @@ export function getWebSocketTarget(pathname) {
   return null;
 }
 
-export function attachWebSocketUpgradeHandler(httpServer, proxies) {
-  const handler = (req, socket, head) => {
+export function attachWebSocketRouter(httpServer, proxies) {
+  const routeConnection = (req, socket, head) => {
     const pathname = (req.url || "").split("?")[0];
-    const target = getWebSocketTarget(pathname);
+    const target = resolveWebSocketTarget(pathname);
 
     if (!target) {
       socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
@@ -22,7 +22,7 @@ export function attachWebSocketUpgradeHandler(httpServer, proxies) {
       return;
     }
 
-    if (!authenticateUpgrade(req, socket)) return;
+    if (!authenticateWebSocketUpgrade(req, socket)) return;
 
     if (target === "notification") {
       proxies.notificationWebSocket.upgrade(req, socket, head);
@@ -36,6 +36,6 @@ export function attachWebSocketUpgradeHandler(httpServer, proxies) {
     proxies.commentGraphqlWebSocket.upgrade(req, socket, head);
   };
 
-  httpServer.on("upgrade", handler);
-  return () => httpServer.off("upgrade", handler);
+  httpServer.on("upgrade", routeConnection);
+  return () => httpServer.off("upgrade", routeConnection);
 }

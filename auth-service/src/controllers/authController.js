@@ -1,8 +1,7 @@
 import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma.js";
-import {
-  invalidateUserExists,
-} from "../services/cacheService.js";
+import { findUserById, toInternalUser } from "../services/userService.js";
+import { logger } from "../utils/logger.js";
 import {
   isValidUsername,
   normalizeUsernameInput,
@@ -94,9 +93,6 @@ export async function signup(req, res) {
     });
     const { user } = session;
 
-    // Invalidate existence cache for this username/email
-    await invalidateUserExists([username, email]);
-
     setSessionCookies(res, session);
 
     res.status(201).json({
@@ -110,7 +106,7 @@ export async function signup(req, res) {
       },
     });
   } catch (error) {
-    console.error("Signup error:", error);
+    logger.error("signup.failed", { error });
     const duplicate = error.code === "P2002";
     res.status(duplicate ? 409 : 500).json({
       success: false,
@@ -167,7 +163,7 @@ export async function login(req, res) {
       },
     });
   } catch (error) {
-    console.error("Login error:", error);
+    logger.error("login.failed", { error });
     res.status(500).json({
       success: false,
       message: "Login failed",
@@ -180,7 +176,7 @@ export async function logout(req, res) {
   try {
     await revokeSession(req.cookies?.refresh_token);
   } catch (error) {
-    console.error("Refresh token revocation error:", error);
+    logger.error("logout.revocation_failed", { error });
   }
   clearSessionCookies(res);
   res.json({
@@ -193,6 +189,7 @@ export async function refresh(req, res) {
   try {
     const session = await rotateSession(req.cookies?.refresh_token);
     if (!session) {
+      clearSessionCookies(res);
       return res.status(401).json({
         success: false,
         message: "Invalid or expired refresh token",
@@ -211,7 +208,7 @@ export async function refresh(req, res) {
       },
     });
   } catch (error) {
-    console.error("Refresh session error:", error);
+    logger.error("session.refresh_failed", { error });
     return res.status(500).json({
       success: false,
       message: "Failed to refresh session",
@@ -224,33 +221,7 @@ export async function getCurrentUser(req, res) {
   try {
     const userId = req.user.userId;
 
-    // Import cache functions at top of this function
-    const { getCachedUser, cacheUser: cacheSingleUser } = await import("../services/cacheService.js");
-
-    // Try cache first
-    let user = await getCachedUser(userId);
-
-    if (!user) {
-      // Cache miss - query database
-      user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          fullName: true,
-          avatarUrl: true,
-          bio: true,
-          isPrivate: true,
-          createdAt: true,
-        },
-      });
-
-      // Cache for future requests
-      if (user) {
-        await cacheSingleUser(userId, user);
-      }
-    }
+    const user = await findUserById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -264,7 +235,7 @@ export async function getCurrentUser(req, res) {
       data: user,
     });
   } catch (error) {
-    console.error("Get user error:", error);
+    logger.error("user.current_lookup_failed", { error, userId: req.user?.userId });
     res.status(500).json({
       success: false,
       message: "Failed to get user",
@@ -281,32 +252,7 @@ export async function getUserById(req, res) {
     }
     const userId = parsedId.value;
 
-    // Import cache functions at top of this function
-    const { getCachedUser, cacheUser: cacheSingleUser } = await import("../services/cacheService.js");
-
-    // Try cache first
-    let user = await getCachedUser(userId);
-
-    if (!user) {
-      // Cache miss - query database
-      user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          fullName: true,
-          avatarUrl: true,
-          bio: true,
-          isPrivate: true,
-        },
-      });
-
-      // Cache for future requests
-      if (user) {
-        await cacheSingleUser(userId, user);
-      }
-    }
+    const user = await findUserById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -315,20 +261,12 @@ export async function getUserById(req, res) {
       });
     }
 
-    const internalUser = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      fullName: user.fullName,
-      avatarUrl: user.avatarUrl,
-    };
-
     res.json({
       success: true,
-      data: internalUser,
+      data: toInternalUser(user),
     });
   } catch (error) {
-    console.error("Get user by ID error:", error);
+    logger.error("user.internal_lookup_failed", { error, userId: req.params.id });
     res.status(500).json({
       success: false,
       message: "Failed to get user",

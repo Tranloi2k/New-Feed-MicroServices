@@ -10,9 +10,12 @@ export function extractAccessToken(req) {
 
 export function verifyToken(token) {
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET, {
+    const verificationOptions = {
       algorithms: ["HS256"],
-    });
+      ...(process.env.JWT_ISSUER && { issuer: process.env.JWT_ISSUER }),
+      ...(process.env.JWT_AUDIENCE && { audience: process.env.JWT_AUDIENCE }),
+    };
+    const payload = jwt.verify(token, process.env.JWT_SECRET, verificationOptions);
     const userId = Number(payload.userId);
     if (!Number.isSafeInteger(userId) || userId <= 0) return null;
     return { ...payload, userId };

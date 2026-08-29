@@ -1,10 +1,11 @@
+import { isServiceTokenValid } from "./serviceAuth.js";
+
 export function getTrustedIdentity(
   headers = {},
   expectedServiceToken = process.env.SERVICE_SECRET
 ) {
   if (
-    !expectedServiceToken ||
-    headers["x-service-token"] !== expectedServiceToken
+    !isServiceTokenValid(headers["x-service-token"], expectedServiceToken)
   ) {
     return null;
   }

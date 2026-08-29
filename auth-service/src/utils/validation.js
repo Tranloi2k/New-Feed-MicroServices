@@ -55,12 +55,12 @@ export function positiveInteger(value, field = "id") {
 
 export function pagination(query = {}) {
   const rawLimit = query.limit === undefined ? 20 : Number(query.limit);
-  const rawCursor = query.cursor === undefined ? 0 : Number(query.cursor);
   if (!Number.isSafeInteger(rawLimit) || rawLimit < 1 || rawLimit > 50) {
     return { error: "limit must be an integer between 1 and 50" };
   }
-  if (!Number.isSafeInteger(rawCursor) || rawCursor < 0) {
-    return { error: "cursor must be a non-negative integer" };
+  const cursor = query.cursor;
+  if (cursor !== undefined && (typeof cursor !== "string" || cursor.length > 512)) {
+    return { error: "cursor must be a string no longer than 512 characters" };
   }
-  return { limit: rawLimit, cursor: rawCursor };
+  return { limit: rawLimit, cursor: cursor || null };
 }

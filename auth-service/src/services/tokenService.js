@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma.js";
-import { getBcryptRounds } from "../config/env.js";
+import { getBcryptRounds, getCookieDomain, getJwtClaims } from "../config/env.js";
 
 export const ACCESS_TOKEN_TTL_SECONDS = 30 * 60;
 export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -28,6 +28,7 @@ function parseRefreshToken(value) {
 }
 
 export function createAccessToken(user) {
+  const { issuer, audience } = getJwtClaims();
   return jwt.sign(
     {
       userId: user.id,
@@ -37,19 +38,22 @@ export function createAccessToken(user) {
     jwtSecret(),
     {
       algorithm: "HS256",
+      issuer,
+      audience,
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,
       jwtid: randomUUID(),
     }
   );
 }
 
-async function buildRefreshRecord(userId) {
+async function buildRefreshRecord(userId, familyId = randomUUID()) {
   const token = newRefreshToken();
   return {
     value: token.value,
     data: {
       id: token.id,
       userId,
+      familyId,
       tokenHash: await bcrypt.hash(token.secret, getBcryptRounds()),
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
     },
@@ -78,10 +82,18 @@ export async function rotateSession(rawToken, db = prisma) {
     return null;
   }
 
-  if (current.revokedAt) return null;
+  // A valid, already-rotated token was replayed. Revoke the entire family so
+  // a stolen predecessor cannot keep a replacement session alive.
+  if (current.revokedAt) {
+    await db.refreshToken.updateMany({
+      where: { familyId: current.familyId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return null;
+  }
   if (current.expiresAt <= new Date()) return null;
 
-  const replacement = await buildRefreshRecord(current.userId);
+  const replacement = await buildRefreshRecord(current.userId, current.familyId);
   const rotated = await db.$transaction(async (tx) => {
     const claimed = await tx.refreshToken.updateMany({
       where: {
@@ -122,10 +134,12 @@ export async function revokeSession(rawToken, db = prisma) {
 }
 
 function cookieSecurity() {
+  const domain = getCookieDomain();
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
+    ...(domain && { domain }),
   };
 }
 

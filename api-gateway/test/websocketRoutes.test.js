@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getWebSocketTarget } from "../src/websocket/upgradeHandler.js";
+import { resolveWebSocketTarget } from "../src/websocket/websocketRouter.js";
 
 test("WebSocket route matching is exact and does not accept lookalike paths", () => {
-  assert.equal(getWebSocketTarget("/graphql/comment"), "comment");
+  assert.equal(resolveWebSocketTarget("/graphql/comment"), "comment");
   assert.equal(
-    getWebSocketTarget("/notifications/socket.io/"),
+    resolveWebSocketTarget("/notifications/socket.io/"),
     "notification"
   );
-  assert.equal(getWebSocketTarget("/graphql/comment-evil"), null);
-  assert.equal(getWebSocketTarget("/notifications/socket.io-evil"), null);
+  assert.equal(resolveWebSocketTarget("/graphql/comment-evil"), null);
+  assert.equal(resolveWebSocketTarget("/notifications/socket.io-evil"), null);
 });
-

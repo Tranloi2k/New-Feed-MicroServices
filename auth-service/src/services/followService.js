@@ -1,4 +1,34 @@
 import prisma from "../lib/prisma.js";
+import { AppError } from "../utils/appError.js";
+
+function encodeConnectionCursor(createdAt, id) {
+  return Buffer.from(JSON.stringify({ createdAt: createdAt.toISOString(), id })).toString("base64url");
+}
+
+function decodeConnectionCursor(cursor) {
+  if (!cursor || cursor === "0") return null;
+  try {
+    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    const createdAt = new Date(value.createdAt);
+    if (!Number.isSafeInteger(value.id) || value.id <= 0 || Number.isNaN(createdAt.getTime())) {
+      throw new Error();
+    }
+    return { createdAt, id: value.id };
+  } catch {
+    throw new AppError("INVALID_CURSOR", "Invalid cursor", 400);
+  }
+}
+
+function createdAtKeyset(cursor, idField) {
+  const value = decodeConnectionCursor(cursor);
+  if (!value) return {};
+  return {
+    OR: [
+      { createdAt: { lt: value.createdAt } },
+      { createdAt: value.createdAt, [idField]: { lt: value.id } },
+    ],
+  };
+}
 
 export async function getFollowCounts(userId) {
   const [followersCount, followingCount] = await Promise.all([
@@ -29,7 +59,7 @@ export async function hasPendingFollowRequest(followerId, followingId) {
 
 export async function followUser(followerId, followingId) {
   if (followerId === followingId) {
-    throw new Error("Cannot follow yourself");
+    throw new AppError("CANNOT_FOLLOW_SELF", "Cannot follow yourself", 400);
   }
 
   const target = await prisma.user.findUnique({
@@ -37,7 +67,7 @@ export async function followUser(followerId, followingId) {
     select: { id: true, isPrivate: true },
   });
   if (!target) {
-    throw new Error("User not found");
+    throw new AppError("USER_NOT_FOUND", "User not found", 404);
   }
 
   if (target.isPrivate) {
@@ -73,6 +103,11 @@ export async function followUser(followerId, followingId) {
 }
 
 export async function unfollowUser(followerId, followingId) {
+  const target = await prisma.user.findUnique({
+    where: { id: followingId },
+    select: { id: true },
+  });
+  if (!target) throw new AppError("USER_NOT_FOUND", "User not found", 404);
   await prisma.$transaction([
     prisma.follow.deleteMany({ where: { followerId, followingId } }),
     prisma.followRequest.deleteMany({ where: { followerId, followingId } }),
@@ -85,17 +120,16 @@ export async function canViewConnections(viewerId, userId) {
     where: { id: userId },
     select: { isPrivate: true },
   });
-  if (!user) throw new Error("User not found");
+  if (!user) throw new AppError("USER_NOT_FOUND", "User not found", 404);
   if (!user.isPrivate || viewerId === userId) return true;
   return isFollowing(viewerId, userId);
 }
 
-export async function listFollowRequests(userId, { limit = 20, cursor = 0 }) {
+export async function listFollowRequests(userId, { limit = 20, cursor = null }) {
   const rows = await prisma.followRequest.findMany({
-    where: { followingId: userId },
-    skip: cursor,
+    where: { followingId: userId, ...createdAtKeyset(cursor, "followerId") },
     take: limit + 1,
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { followerId: "desc" }],
     include: {
       follower: {
         select: { id: true, username: true, fullName: true, avatarUrl: true, bio: true },
@@ -107,7 +141,9 @@ export async function listFollowRequests(userId, { limit = 20, cursor = 0 }) {
   return {
     users: items.map((row) => row.follower),
     hasMore,
-    nextCursor: hasMore ? String(cursor + limit) : null,
+    nextCursor: hasMore
+      ? encodeConnectionCursor(items.at(-1).createdAt, items.at(-1).followerId)
+      : null,
   };
 }
 
@@ -116,7 +152,9 @@ export async function acceptFollowRequest(userId, followerId) {
     const removed = await tx.followRequest.deleteMany({
       where: { followerId, followingId: userId },
     });
-    if (removed.count !== 1) throw new Error("Follow request not found");
+    if (removed.count !== 1) {
+      throw new AppError("FOLLOW_REQUEST_NOT_FOUND", "Follow request not found", 404);
+    }
     await tx.follow.upsert({
       where: { followerId_followingId: { followerId, followingId: userId } },
       create: { followerId, followingId: userId },
@@ -130,47 +168,47 @@ export async function rejectFollowRequest(userId, followerId) {
   const removed = await prisma.followRequest.deleteMany({
     where: { followerId, followingId: userId },
   });
-  if (removed.count !== 1) throw new Error("Follow request not found");
+  if (removed.count !== 1) {
+    throw new AppError("FOLLOW_REQUEST_NOT_FOUND", "Follow request not found", 404);
+  }
 }
 
 export async function getFollowingIds(userId, { limit = 500, cursor = 0 } = {}) {
   const rows = await prisma.follow.findMany({
-    where: { followerId: userId },
+    where: { followerId: userId, followingId: { gt: cursor } },
     select: { followingId: true },
     orderBy: { followingId: "asc" },
-    skip: cursor,
     take: limit + 1,
   });
   const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
   return {
-    ids: (hasMore ? rows.slice(0, limit) : rows).map((row) => row.followingId),
-    nextCursor: hasMore ? String(cursor + limit) : null,
+    ids: items.map((row) => row.followingId),
+    nextCursor: hasMore ? String(items.at(-1).followingId) : null,
   };
 }
 
 export async function getFollowerIds(userId, { limit = 500, cursor = 0 } = {}) {
   const rows = await prisma.follow.findMany({
-    where: { followingId: userId },
+    where: { followingId: userId, followerId: { gt: cursor } },
     select: { followerId: true },
     orderBy: { followerId: "asc" },
-    skip: cursor,
     take: limit + 1,
   });
   const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
   return {
-    ids: (hasMore ? rows.slice(0, limit) : rows).map((row) => row.followerId),
-    nextCursor: hasMore ? String(cursor + limit) : null,
+    ids: items.map((row) => row.followerId),
+    nextCursor: hasMore ? String(items.at(-1).followerId) : null,
   };
 }
 
-export async function listFollowers(userId, { limit = 20, cursor = 0 }) {
+export async function listFollowers(userId, { limit = 20, cursor = null }) {
   const take = limit;
-  const skip = cursor;
   const rows = await prisma.follow.findMany({
-    where: { followingId: userId },
-    skip,
+    where: { followingId: userId, ...createdAtKeyset(cursor, "followerId") },
     take: take + 1,
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { followerId: "desc" }],
     include: {
       follower: {
         select: {
@@ -190,18 +228,18 @@ export async function listFollowers(userId, { limit = 20, cursor = 0 }) {
   return {
     users: items.map((r) => r.follower),
     hasMore,
-    nextCursor: hasMore ? String(skip + take) : null,
+    nextCursor: hasMore
+      ? encodeConnectionCursor(items.at(-1).createdAt, items.at(-1).followerId)
+      : null,
   };
 }
 
-export async function listFollowing(userId, { limit = 20, cursor = 0 }) {
+export async function listFollowing(userId, { limit = 20, cursor = null }) {
   const take = limit;
-  const skip = cursor;
   const rows = await prisma.follow.findMany({
-    where: { followerId: userId },
-    skip,
+    where: { followerId: userId, ...createdAtKeyset(cursor, "followingId") },
     take: take + 1,
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { followingId: "desc" }],
     include: {
       following: {
         select: {
@@ -221,6 +259,8 @@ export async function listFollowing(userId, { limit = 20, cursor = 0 }) {
   return {
     users: items.map((r) => r.following),
     hasMore,
-    nextCursor: hasMore ? String(skip + take) : null,
+    nextCursor: hasMore
+      ? encodeConnectionCursor(items.at(-1).createdAt, items.at(-1).followingId)
+      : null,
   };
 }

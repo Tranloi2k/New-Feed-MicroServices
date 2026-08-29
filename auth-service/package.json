@@ -9,6 +9,7 @@
     "start": "node src/app.js",
     "test": "node --test test/*.test.js",
     "seed:demo": "node scripts/seed-demo-user.mjs",
+    "sessions:cleanup": "node scripts/cleanup-refresh-tokens.mjs",
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "generate": "prisma generate"

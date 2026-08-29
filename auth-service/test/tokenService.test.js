@@ -15,6 +15,7 @@ import {
 function matches(row, where) {
   if (where.id !== undefined && row.id !== where.id) return false;
   if (where.userId !== undefined && row.userId !== where.userId) return false;
+  if (where.familyId !== undefined && row.familyId !== where.familyId) return false;
   if (where.revokedAt === null && row.revokedAt != null) return false;
   if (where.expiresAt?.gt && row.expiresAt <= where.expiresAt.gt) return false;
   return true;
@@ -50,6 +51,8 @@ function createDb(user) {
 
 test("issues a 30-minute JWT and stores only a bcrypt refresh secret", async () => {
   process.env.JWT_SECRET = "token-service-test-secret";
+  process.env.JWT_ISSUER = "test-auth";
+  process.env.JWT_AUDIENCE = "test-api";
   const user = { id: 7, username: "lan", email: "lan@example.com" };
   const { db, records } = createDb(user);
   const before = Date.now();
@@ -57,6 +60,8 @@ test("issues a 30-minute JWT and stores only a bcrypt refresh secret", async () 
   const session = await issueSession(user, db);
   const payload = jwt.verify(session.accessToken, process.env.JWT_SECRET, {
     algorithms: ["HS256"],
+    issuer: process.env.JWT_ISSUER,
+    audience: process.env.JWT_AUDIENCE,
   });
   assert.equal(payload.exp - payload.iat, ACCESS_TOKEN_TTL_SECONDS);
 
@@ -65,10 +70,11 @@ test("issues a 30-minute JWT and stores only a bcrypt refresh secret", async () 
   assert.ok(stored);
   assert.notEqual(stored.tokenHash, secret);
   assert.equal(await bcrypt.compare(secret, stored.tokenHash), true);
+  assert.ok(stored.familyId);
   assert.ok(stored.expiresAt.getTime() >= before + REFRESH_TOKEN_TTL_MS);
 });
 
-test("refresh token is rotated and the previous token cannot be claimed twice", async () => {
+test("refresh-token replay revokes its entire token family", async () => {
   process.env.JWT_SECRET = "token-service-test-secret";
   const user = { id: 8, username: "minh", email: "minh@example.com" };
   const { db, records } = createDb(user);
@@ -82,7 +88,7 @@ test("refresh token is rotated and the previous token cannot be claimed twice", 
 
   assert.equal(await rotateSession(original.refreshToken, db), null);
   const newId = rotated.refreshToken.split(".")[0];
-  assert.equal(records.get(newId).revokedAt, null);
+  assert.ok(records.get(newId).revokedAt instanceof Date);
 });
 
 test("logout revokes the persisted refresh token", async () => {
