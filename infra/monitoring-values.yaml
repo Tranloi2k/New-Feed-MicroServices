@@ -1,12 +1,11 @@
 prometheus:
   prometheusSpec:
-    retention: 7d
+    retention: 3d
     resources:
       requests:
-        memory: 400Mi
-        cpu: 100m
+        memory: 300Mi
       limits:
-        memory: 1Gi
+        memory: 700Mi
         cpu: 500m
     storageSpec:
       volumeClaimTemplate:
