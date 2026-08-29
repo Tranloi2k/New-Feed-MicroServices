@@ -56,6 +56,39 @@ async function buildProfile(user, viewerId) {
   };
 }
 
+export async function findUsers(query, viewerId, limit = 12, db = prisma) {
+  return db.user.findMany({
+    where: {
+      id: { not: viewerId },
+      OR: [
+        { username: { contains: query, mode: "insensitive" } },
+        { fullName: { contains: query, mode: "insensitive" } },
+      ],
+    },
+    orderBy: [{ username: "asc" }, { id: "asc" }],
+    take: limit,
+    select: { id: true, username: true, fullName: true, avatarUrl: true, bio: true },
+  });
+}
+
+export async function searchUsers(req, res) {
+  const query = String(req.query.q || "").trim();
+  const limit = req.query.limit === undefined ? 12 : Number(req.query.limit);
+  if (query.length < 2 || query.length > 50) {
+    return res.status(400).json({ success: false, message: "q must contain between 2 and 50 characters" });
+  }
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20) {
+    return res.status(400).json({ success: false, message: "limit must be an integer between 1 and 20" });
+  }
+  try {
+    const users = await findUsers(query, req.user.userId, limit);
+    return res.json({ success: true, data: { users } });
+  } catch (error) {
+    logger.error("users.search_failed", { error, userId: req.user?.userId, query });
+    return res.status(500).json({ success: false, message: "Failed to search users" });
+  }
+}
+
 export async function getProfileByUsername(req, res) {
   try {
     const username = (req.params.username || "").trim().toLowerCase();

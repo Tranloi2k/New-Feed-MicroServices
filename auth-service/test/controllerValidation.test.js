@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { signup } from "../src/controllers/authController.js";
-import { getFollowerIdsInternal } from "../src/controllers/profileController.js";
+import { findUsers, getFollowerIdsInternal, searchUsers } from "../src/controllers/profileController.js";
 
 function responseDouble() {
   return {
@@ -33,4 +33,21 @@ test("internal follower IDs reject non-canonical user identifiers", async () => 
 
   assert.equal(res.statusCode, 400);
   assert.match(res.body.message, /positive integer/);
+});
+
+test("user search validates short queries before touching the database", async () => {
+  const res = responseDouble();
+  await searchUsers({ query: { q: "a" }, user: { userId: 1 } }, res);
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.message, /between 2 and 50/);
+});
+
+test("user search is case-insensitive, bounded, and excludes the viewer", async () => {
+  let args;
+  const users = [{ id: 2, username: "lan", fullName: "Lan", avatarUrl: null, bio: null }];
+  const db = { user: { findMany: async (input) => { args = input; return users; } } };
+  assert.deepEqual(await findUsers("Lan", 1, 8, db), users);
+  assert.equal(args.where.id.not, 1);
+  assert.equal(args.where.OR[0].username.mode, "insensitive");
+  assert.equal(args.take, 8);
 });

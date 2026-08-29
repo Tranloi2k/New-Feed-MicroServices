@@ -7,6 +7,8 @@ import {
 export function createUserRoutes({ proxy, jsonParser }) {
   const router = express.Router();
 
+  router.get("/api/users/search", authenticateToken, proxy);
+
   router.get(
     "/api/users/username/:username",
     optionalAuthenticateToken,
