@@ -3,6 +3,7 @@ import prisma from "../lib/prisma.js";
 import { createNotification } from "./notificationStore.js";
 import { getFollowerIds } from "./recipientResolver.js";
 import { isChatUserOnline } from "../config/redis.js";
+import { pushChatMessage } from "./pushNotifier.js";
 
 const QUEUE = "notification-service.events.v1";
 const DEAD_LETTER_EXCHANGE = "events.dlx";
@@ -112,7 +113,11 @@ export async function processEventOnce(
   io,
   event,
   db = prisma,
-  { resolveFollowerIds = getFollowerIds, isUserOnline = isChatUserOnline } = {}
+  {
+    resolveFollowerIds = getFollowerIds,
+    isUserOnline = isChatUserOnline,
+    sendChatPush = pushChatMessage,
+  } = {}
 ) {
   validateEventContract(event);
 
@@ -162,6 +167,17 @@ export async function processEventOnce(
   for (const action of actions) {
     io.to(action.room).emit(action.name, action.payload);
   }
+
+  if (event.eventType === "chat.message.created") {
+    // Push runs after the event is committed and must never fail it: a retry
+    // would re-emit sockets and re-notify everyone for one unreachable device.
+    try {
+      await sendChatPush(enrichedEvent.data);
+    } catch (error) {
+      console.error("Chat push failed:", error.message);
+    }
+  }
+
   return true;
 }
 
