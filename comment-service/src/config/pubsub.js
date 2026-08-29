@@ -17,20 +17,13 @@ const redisCommonOptions = {
     db: 2,
 };
 
-const redisUrl =
-    process.env.REDIS_URL ||
-    `redis://${process.env.REDIS_HOST || "localhost"}:${process.env.REDIS_PORT || "6379"}`;
+const redisUrl = process.env.REDIS_URL;
+if (!redisUrl) {
+    throw new Error("REDIS_URL is required for Comment Service GraphQL subscriptions");
+}
 
 function createPubSubRedisClient() {
-    if (process.env.REDIS_URL) {
-        return new Redis(process.env.REDIS_URL, redisCommonOptions);
-    }
-    return new Redis({
-        host: process.env.REDIS_HOST || "localhost",
-        port: parseInt(process.env.REDIS_PORT || "6379", 10),
-        password: process.env.REDIS_PASSWORD || undefined,
-        ...redisCommonOptions,
-    });
+    return new Redis(redisUrl, redisCommonOptions);
 }
 
 // Connection event handlers

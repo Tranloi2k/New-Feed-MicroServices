@@ -7,6 +7,8 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV}
       - PORT=8080
+      - TRUST_PROXY_HOPS=${TRUST_PROXY_HOPS:-0}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - AUTH_SERVICE_URL=http://auth-service:3001
       - POST_SERVICE_URL=http://post-service:3002
       - MEDIA_SERVICE_URL=http://media-service:3003
@@ -33,11 +35,6 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV}
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/auth_db
-      - DEMO_LOGIN_ENABLED=${DEMO_LOGIN_ENABLED:-}
-      - DEMO_USER_EMAIL=${DEMO_USER_EMAIL:-demo@newfeed.local}
-      - DEMO_USER_PASSWORD=${DEMO_USER_PASSWORD:-Demo123!}
-      - DEMO_USER_USERNAME=${DEMO_USER_USERNAME:-demo}
-      - DEMO_USER_FULL_NAME=${DEMO_USER_FULL_NAME:-Demo User}
       - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-10}
     depends_on:
       postgres-auth:
@@ -62,11 +59,6 @@ services:
       - CLIENT_URL=${CLIENT_URL}
       - AUTH_COOKIE_DOMAIN=${AUTH_COOKIE_DOMAIN:-}
       - REDIS_URL=redis://redis:6379
-      - DEMO_LOGIN_ENABLED=${DEMO_LOGIN_ENABLED:-}
-      - DEMO_USER_EMAIL=${DEMO_USER_EMAIL:-demo@newfeed.local}
-      - DEMO_USER_PASSWORD=${DEMO_USER_PASSWORD:-Demo123!}
-      - DEMO_USER_USERNAME=${DEMO_USER_USERNAME:-demo}
-      - DEMO_USER_FULL_NAME=${DEMO_USER_FULL_NAME:-Demo User}
       - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-10}
     depends_on:
       auth-migrate:
@@ -114,9 +106,6 @@ services:
       - SERVICE_SECRET=${SERVICE_SECRET}
       - CLIENT_URL=${CLIENT_URL}
       - REDIS_URL=redis://redis:6379
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
     depends_on:
       - postgres-comment
       - rabbitmq
@@ -137,7 +126,6 @@ services:
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
-      - SERVICE_SECRET=${SERVICE_SECRET}
       - CLIENT_URL=${CLIENT_URL}
     networks:
       - microservices-network
