@@ -11,3 +11,11 @@ test("WebSocket route matching is exact and does not accept lookalike paths", ()
   assert.equal(resolveWebSocketTarget("/graphql/comment-evil"), null);
   assert.equal(resolveWebSocketTarget("/notifications/socket.io-evil"), null);
 });
+
+test("chat Socket.IO upgrades route to the chat service", () => {
+  assert.equal(resolveWebSocketTarget("/chat/socket.io"), "chat");
+  assert.equal(resolveWebSocketTarget("/chat/socket.io/"), "chat");
+  assert.equal(resolveWebSocketTarget("/chat/socket.io/websocket"), "chat");
+  assert.equal(resolveWebSocketTarget("/chat/socket.io-evil"), null);
+  assert.equal(resolveWebSocketTarget("/chat/socket.ioevil"), null);
+});

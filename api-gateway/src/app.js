@@ -50,7 +50,7 @@ export function createApp({
   app.use(
     createContentRoutes({ proxies: serviceProxies, jsonParser: apiJson })
   );
-  app.use(createChatRoutes({ proxy: serviceProxies.chat, jsonParser: apiJson }));
+  app.use(createChatRoutes({ proxies: serviceProxies, jsonParser: apiJson }));
   app.use(createSystemRoutes());
 
   app.use(notFoundHandler);

@@ -103,6 +103,14 @@ export function createServiceProxies({ services, logLevel }) {
       label: "Notification WS",
       errorMessage: "Notification gateway proxy error",
     }),
+    // Chat serves Socket.IO on /chat/socket.io itself, so the path is
+    // forwarded unchanged instead of being rewritten like notifications.
+    chatWebSocket: createWebSocketProxy({
+      target: services.chat,
+      logLevel,
+      label: "Chat WS",
+      errorMessage: "Chat WebSocket gateway proxy error",
+    }),
     commentGraphqlWebSocket: createWebSocketProxy({
       target: services.comment,
       logLevel,

@@ -7,6 +7,12 @@ export function resolveWebSocketTarget(pathname) {
   ) {
     return "notification";
   }
+  if (
+    pathname === "/chat/socket.io" ||
+    pathname.startsWith("/chat/socket.io/")
+  ) {
+    return "chat";
+  }
   if (pathname === "/graphql/comment") return "comment";
   return null;
 }
@@ -26,6 +32,11 @@ export function attachWebSocketRouter(httpServer, proxies) {
 
     if (target === "notification") {
       proxies.notificationWebSocket.upgrade(req, socket, head);
+      return;
+    }
+
+    if (target === "chat") {
+      proxies.chatWebSocket.upgrade(req, socket, head);
       return;
     }
 

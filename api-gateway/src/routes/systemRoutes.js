@@ -60,6 +60,7 @@ export function createSystemRoutes() {
         graphqlPost: "/graphql/post",
         graphqlComment: "/graphql/comment",
         notificationsWs: "/notifications/socket.io",
+        chatWs: "/chat/socket.io",
       },
     });
   });

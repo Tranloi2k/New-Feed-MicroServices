@@ -36,6 +36,7 @@ function createFakeProxies() {
       "media",
       "comments",
       "notificationWebSocket",
+      "chatWebSocket",
       "commentGraphqlWebSocket",
     ].map((name) => [name, proxy(name)])
   );
@@ -166,6 +167,27 @@ test("app composition strips forged identity and preserves protected JSON routes
     assert.equal(response.name, "users");
     assert.deepEqual(response.body, { bio: "hello" });
     assert.equal(response.user.userId, 42);
+  } finally {
+    await close(server);
+    if (previousSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previousSecret;
+  }
+});
+
+test("chat Socket.IO polling handshake is authenticated and routed to the chat service", async () => {
+  const previousSecret = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = "composition-test-secret";
+  const app = createApp({ proxies: createFakeProxies(), rateLimiter: (_req, _res, next) => next(), clientUrl: "http://localhost:3000" });
+  const server = await listen(app);
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.equal((await fetch(`${origin}/chat/socket.io/?EIO=4&transport=polling`)).status, 401);
+    const token = jwt.sign({ userId: 42 }, process.env.JWT_SECRET);
+    const response = await fetch(`${origin}/chat/socket.io/?EIO=4&transport=polling`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).name, "chatWebSocket");
   } finally {
     await close(server);
     if (previousSecret === undefined) delete process.env.JWT_SECRET;

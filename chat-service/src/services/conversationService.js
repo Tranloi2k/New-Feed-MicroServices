@@ -121,3 +121,14 @@ export async function listConversations(userId, { cursor, limit = 20 }, db = pri
 export async function getActiveMemberships(userId, db = prisma) {
   return db.conversationMember.findMany({ where: { userId, leftAt: null }, select: { conversationId: true } });
 }
+
+/** Distinct userIds sharing any of the given conversations, excluding userId. */
+export async function getPeerIds(userId, conversationIds, db = prisma) {
+  if (!conversationIds.length) return [];
+  const peers = await db.conversationMember.findMany({
+    where: { conversationId: { in: conversationIds }, leftAt: null, userId: { not: userId } },
+    select: { userId: true },
+    distinct: ["userId"],
+  });
+  return peers.map((peer) => peer.userId);
+}

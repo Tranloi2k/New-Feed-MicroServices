@@ -24,6 +24,29 @@ import {
 
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync("invalid-password", 10);
 
+function sessionData(req, session) {
+  const data = {
+    userId: session.user.id,
+    username: session.user.username,
+    email: session.user.email,
+    fullName: session.user.fullName,
+    avatarUrl: session.user.avatarUrl,
+  };
+
+  // Browser sessions stay HttpOnly-cookie only. Native clients explicitly opt
+  // in so they can keep both values in the OS secure credential store.
+  if (req.get("x-client-platform") === "mobile") {
+    return {
+      ...data,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      expiresIn: 30 * 60,
+    };
+  }
+
+  return data;
+}
+
 // Signup
 export async function signup(req, res) {
   try {
@@ -98,12 +121,7 @@ export async function signup(req, res) {
     res.status(201).json({
       success: true,
       message: "User registered successfully",
-      data: {
-        userId: user.id,
-        username: user.username,
-        email: user.email,
-        fullName: user.fullName,
-      },
+      data: sessionData(req, session),
     });
   } catch (error) {
     logger.error("signup.failed", { error });
@@ -150,17 +168,13 @@ export async function login(req, res) {
       });
     }
 
-    setSessionCookies(res, await issueSession(user));
+    const session = await issueSession(user);
+    setSessionCookies(res, session);
 
     res.json({
       success: true,
       message: "Login successful",
-      data: {
-        userId: user.id,
-        username: user.username,
-        email: user.email,
-        fullName: user.fullName,
-      },
+      data: sessionData(req, session),
     });
   } catch (error) {
     logger.error("login.failed", { error });
@@ -174,7 +188,7 @@ export async function login(req, res) {
 // Logout
 export async function logout(req, res) {
   try {
-    await revokeSession(req.cookies?.refresh_token);
+    await revokeSession(req.cookies?.refresh_token || req.body?.refreshToken);
   } catch (error) {
     logger.error("logout.revocation_failed", { error });
   }
@@ -187,7 +201,9 @@ export async function logout(req, res) {
 
 export async function refresh(req, res) {
   try {
-    const session = await rotateSession(req.cookies?.refresh_token);
+    const session = await rotateSession(
+      req.cookies?.refresh_token || req.body?.refreshToken
+    );
     if (!session) {
       clearSessionCookies(res);
       return res.status(401).json({
@@ -200,12 +216,7 @@ export async function refresh(req, res) {
     return res.json({
       success: true,
       message: "Session refreshed",
-      data: {
-        userId: session.user.id,
-        username: session.user.username,
-        email: session.user.email,
-        fullName: session.user.fullName,
-      },
+      data: sessionData(req, session),
     });
   } catch (error) {
     logger.error("session.refresh_failed", { error });
