@@ -1,9 +1,18 @@
 import { assertMember } from "../../services/conversationService.js";
 import { setTyping } from "../../services/presenceService.js";
+import { socketRateLimits } from "../../config/rateLimits.js";
+import { allowSocketEvent } from "../rateLimit.js";
 
 export function registerTypingHandler(io, socket) {
   async function update(input, isTyping) {
     try {
+      const rateLimit = await allowSocketEvent(
+        socket,
+        "typing",
+        socketRateLimits.typing
+      );
+      if (!rateLimit.allowed) return;
+
       const conversationId = String(input?.conversationId || "");
       await assertMember(conversationId, socket.data.userId);
       await setTyping(conversationId, socket.data.userId, isTyping);

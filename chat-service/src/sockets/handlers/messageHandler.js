@@ -2,11 +2,28 @@ import { createMessage, getRecipients } from "../../services/messageService.js";
 import { incrementUnread } from "../../services/unreadService.js";
 import { publishMessageCreated } from "../../events/publisher.js";
 import { getUserById } from "../../services/userService.js";
+import { socketRateLimits } from "../../config/rateLimits.js";
+import { allowSocketEvent } from "../rateLimit.js";
 
 export function registerMessageHandler(io, socket) {
   socket.on("message:send", async (input = {}) => {
     const clientMessageId = input.clientMessageId;
     try {
+      const rateLimit = await allowSocketEvent(
+        socket,
+        "message:send",
+        socketRateLimits.messageSend
+      );
+      if (!rateLimit.allowed) {
+        socket.emit("message:error", {
+          clientMessageId,
+          code: "RATE_LIMIT_EXCEEDED",
+          message: "Bạn đang gửi tin nhắn quá nhanh.",
+          retryAfter: rateLimit.retryAfter,
+        });
+        return;
+      }
+
       const { message, created } = await createMessage(socket.data.userId, input);
       socket.emit("message:ack", {
         clientMessageId: message.clientMessageId,

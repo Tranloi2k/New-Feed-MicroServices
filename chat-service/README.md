@@ -14,6 +14,19 @@ npm run dev
 
 REST is served below `/api/chat`; Socket.IO uses the deliberately distinct `/chat/socket.io` path. Clients therefore keep two WebSocket connections: chat and notifications scale differently and remain separate responsibilities.
 
+## Per-user rate limits
+
+Rate limits use atomic Redis sliding windows keyed by authenticated `userId`, so they are shared by every chat-service replica:
+
+- Create conversation: 10 requests/minute.
+- Message history: 60 requests/minute.
+- Delta sync: 60 requests/minute.
+- `message:send`: 30 events/10 seconds and 300 events/5 minutes.
+- Typing events: 10 events/10 seconds.
+- `presence:ping`: 1 event/20 seconds.
+
+REST requests receive `429`, `Retry-After`, and a `RATE_LIMIT_EXCEEDED` body. Socket clients receive `rate_limit:error`; limited message sends also receive `message:error` with `retryAfter` so the offline queue can retry without disconnecting. If Redis becomes temporarily unavailable, limits fail open to preserve chat availability.
+
 ## Delivery and sync guarantees
 
 - The client creates a UUID `clientMessageId` and retries queued messages sequentially. The database unique constraint makes retry idempotent; only a newly committed message is broadcast or counted unread.
