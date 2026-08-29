@@ -10,13 +10,10 @@ spec:
       size: 128Mi
       storageClass: local-path
       path: /data
-    certResolvers:
-      letsencrypt:
-        email: tranloi162710@gmail.com
-        tlsChallenge: true
-        httpChallenge:
-          entryPoint: web
-        storage: /data/acme.json
+    additionalArguments:
+      - "--certificatesresolvers.letsencrypt.acme.email=tranloi162710@gmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
     deployment:
       initContainers:
         - name: volume-permissions
@@ -28,11 +25,3 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
-    ports:
-      web:
-        redirectTo:
-          port: websecure
-          priority: 10
-      websecure:
-        tls:
-          enabled: true
