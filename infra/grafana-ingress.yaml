@@ -4,10 +4,12 @@ metadata:
   name: grafana-ingress
   namespace: monitoring
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
 spec:
   rules:
-    - host: grafana.169.58.249.13.nip.io
+    - host: grafana.vps-services.online
       http:
         paths:
           - path: /
@@ -17,3 +19,6 @@ spec:
                 name: monitoring-grafana
                 port:
                   number: 80
+  tls:
+    - hosts:
+        - grafana.vps-services.online
