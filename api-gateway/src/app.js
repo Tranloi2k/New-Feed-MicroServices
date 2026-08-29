@@ -15,6 +15,7 @@ import { createContentRoutes } from "./routes/contentRoutes.js";
 import { createGraphqlRoutes } from "./routes/graphqlRoutes.js";
 import { createSystemRoutes } from "./routes/systemRoutes.js";
 import { createUserRoutes } from "./routes/userRoutes.js";
+import { createChatRoutes } from "./routes/chatRoutes.js";
 
 export function createApp({
   proxies,
@@ -49,6 +50,7 @@ export function createApp({
   app.use(
     createContentRoutes({ proxies: serviceProxies, jsonParser: apiJson })
   );
+  app.use(createChatRoutes({ proxy: serviceProxies.chat, jsonParser: apiJson }));
   app.use(createSystemRoutes());
 
   app.use(notFoundHandler);

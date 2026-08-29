@@ -2,6 +2,7 @@ import amqp from "amqplib";
 import prisma from "../lib/prisma.js";
 import { createNotification } from "./notificationStore.js";
 import { getFollowerIds } from "./recipientResolver.js";
+import { isChatUserOnline } from "../config/redis.js";
 
 const QUEUE = "notification-service.events.v1";
 const DEAD_LETTER_EXCHANGE = "events.dlx";
@@ -65,6 +66,14 @@ async function buildActions(tx, event) {
         data: { commentId: data.commentId, likedBy: data.likedBy },
       });
     }
+  } else if (eventType === "chat.message.created") {
+    for (const userId of data.offlineRecipientIds || []) {
+      await persistNotification(tx, actions, userId, {
+        type: "chat_message",
+        message: `${data.senderName || "Someone"}: ${String(data.preview || "").slice(0, 100)}`,
+        data: { type: "chat", conversationId: data.conversationId, messageId: data.messageId },
+      });
+    }
   }
 
   return actions;
@@ -87,13 +96,23 @@ export function validateEventContract(event) {
   ) {
     throw new Error("Invalid comment.created contract");
   }
+  if (
+    event.eventType === "chat.message.created" &&
+    (!event.data.conversationId ||
+      !event.data.messageId ||
+      !positiveId(event.data.senderId) ||
+      !Array.isArray(event.data.recipientIds) ||
+      event.data.recipientIds.some((id) => !positiveId(id)))
+  ) {
+    throw new Error("Invalid chat.message.created contract");
+  }
 }
 
 export async function processEventOnce(
   io,
   event,
   db = prisma,
-  { resolveFollowerIds = getFollowerIds } = {}
+  { resolveFollowerIds = getFollowerIds, isUserOnline = isChatUserOnline } = {}
 ) {
   validateEventContract(event);
 
@@ -102,7 +121,7 @@ export async function processEventOnce(
   });
   if (alreadyProcessed) return false;
 
-  const enrichedEvent =
+  let enrichedEvent =
     event.eventType === "post.created"
       ? {
           ...event,
@@ -112,6 +131,13 @@ export async function processEventOnce(
           },
         }
       : event;
+  if (event.eventType === "chat.message.created") {
+    const statuses = await Promise.all(event.data.recipientIds.map(async (userId) => ({ userId, online: await isUserOnline(userId) })));
+    enrichedEvent = {
+      ...event,
+      data: { ...event.data, offlineRecipientIds: statuses.filter(({ online }) => !online).map(({ userId }) => userId) },
+    };
+  }
 
   let actions;
   try {
@@ -169,7 +195,7 @@ export async function initEventListener(io) {
     connection.on("error", () => {});
     channel = await connection.createConfirmChannel();
 
-    for (const exchange of ["comments", "posts", "likes"]) {
+    for (const exchange of ["comments", "posts", "likes", "chat"]) {
       await channel.assertExchange(exchange, "topic", { durable: true });
     }
     await channel.assertExchange(DEAD_LETTER_EXCHANGE, "direct", { durable: true });
@@ -190,6 +216,7 @@ export async function initEventListener(io) {
       ["posts", "post.created"],
       ["posts", "post.liked"],
       ["likes", "like.created"],
+      ["chat", "chat.message.created"],
     ];
     for (const [exchange, routingKey] of bindings) {
       await channel.bindQueue(QUEUE, exchange, routingKey);

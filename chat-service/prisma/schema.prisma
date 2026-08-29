@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Conversation {
+  id               String           @id
+  type             ConversationType
+  participantsHash String?          @unique @map("participants_hash")
+  title            String?
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  lastMessageAt    DateTime?        @map("last_message_at")
+  members          ConversationMember[]
+  messages         Message[]
+
+  @@index([lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+enum ConversationType {
+  direct
+  group
+}
+
+model ConversationMember {
+  conversationId    String     @map("conversation_id")
+  userId            Int        @map("user_id")
+  role              MemberRole @default(member)
+  joinedAt          DateTime   @default(now()) @map("joined_at")
+  lastReadMessageId String?    @map("last_read_message_id")
+  mutedUntil        DateTime?  @map("muted_until")
+  leftAt            DateTime?  @map("left_at")
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId, leftAt])
+  @@map("conversation_members")
+}
+
+enum MemberRole {
+  owner
+  admin
+  member
+}
+
+model Message {
+  id              String      @id
+  conversationId  String      @map("conversation_id")
+  senderId        Int         @map("sender_id")
+  clientMessageId String      @map("client_message_id")
+  type            MessageType @default(text)
+  content         String      @db.Text
+  mediaUrl        String?     @map("media_url")
+  deletedAt       DateTime?   @map("deleted_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, clientMessageId])
+  @@index([conversationId, id(sort: Desc)])
+  @@map("messages")
+}
+
+enum MessageType {
+  text
+  image
+  system
+}

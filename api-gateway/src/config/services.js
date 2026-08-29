@@ -8,6 +8,7 @@ const REQUIRED_ENV = [
   "MEDIA_SERVICE_URL",
   "COMMENT_SERVICE_URL",
   "NOTIFICATION_SERVICE_URL",
+  "CHAT_SERVICE_URL",
   "REDIS_URL",
   "CLIENT_URL",
 ];
@@ -41,6 +42,7 @@ export function getServices() {
     media: process.env.MEDIA_SERVICE_URL,
     comment: process.env.COMMENT_SERVICE_URL,
     notification: process.env.NOTIFICATION_SERVICE_URL,
+    chat: process.env.CHAT_SERVICE_URL,
   };
 }
 
@@ -55,4 +57,5 @@ export function logServiceUrls(services = getServices()) {
   logger.info(`   - Media: ${services.media}`);
   logger.info(`   - Comment: ${services.comment}`);
   logger.info(`   - Notification: ${services.notification}`);
+  logger.info(`   - Chat: ${services.chat}`);
 }

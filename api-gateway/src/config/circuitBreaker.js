@@ -11,6 +11,7 @@ export const serviceCircuitBreakerOptions = {
   post: {},
   comment: {},
   notification: {},
+  chat: {},
   media: {
     timeout: 30_000,
     errorThresholdPercentage: 60,

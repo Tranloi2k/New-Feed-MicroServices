@@ -80,6 +80,11 @@ export function createServiceProxies({ services, logLevel }) {
         onProxyReq: forwardUserHeaders,
       }
     ),
+    chat: createCircuitBreakerProxy("chat", services.chat, {
+      pathRewrite: { "^/api/chat": "/api/chat" },
+      logLevel,
+      onProxyReq: forwardIdentityAndJson,
+    }),
     media: createCircuitBreakerProxy("media", services.media, {
       pathRewrite: { "^/api/media": "/api/media" },
       logLevel,

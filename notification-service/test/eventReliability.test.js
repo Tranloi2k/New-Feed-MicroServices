@@ -83,3 +83,18 @@ test("comment.created requires a real post author id", () => {
     /Invalid comment\.created contract/
   );
 });
+
+test("chat events notify only offline recipients and remain idempotent", async () => {
+  const { db, io, notifications } = createHarness();
+  const event = {
+    eventId: "event-chat",
+    eventType: "chat.message.created",
+    version: 1,
+    data: { conversationId: "01CHAT", messageId: "01MESSAGE", senderId: 1, senderName: "Lan", recipientIds: [2, 3], preview: "Hello" },
+  };
+  const isUserOnline = async (userId) => userId === 2;
+  assert.equal(await processEventOnce(io, event, db, { isUserOnline }), true);
+  assert.equal(await processEventOnce(io, event, db, { isUserOnline }), false);
+  assert.deepEqual(notifications.map(({ userId }) => userId), [3]);
+  assert.equal(notifications[0].data.conversationId, "01CHAT");
+});
