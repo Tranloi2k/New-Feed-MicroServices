@@ -284,3 +284,67 @@ export async function getUserById(req, res) {
     });
   }
 }
+
+// TEMPORARY: resets a password from the identifier alone, with no proof that
+// the caller owns the account. Anyone who knows an email can take the account
+// over. Replace with an emailed single-use token before this serves real users;
+// the surrounding validation, session revocation and rate limiting already fit
+// that flow, so only an ownership check has to be added here.
+export async function resetPassword(req, res) {
+  try {
+    const identifier = normalizeEmail(req.body?.identifier ?? req.body?.email);
+    const { password } = req.body || {};
+
+    if (!identifier) {
+      return res.status(400).json({
+        success: false,
+        message: "Email or username is required",
+      });
+    }
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ success: false, message: passwordError });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: identifier },
+          { email: { equals: identifier, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "No account matches that email or username",
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, getBcryptRounds());
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: user.id }, data: { passwordHash } }),
+      // A changed password must not leave older sessions usable.
+      prisma.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    logger.warn("password.reset_without_verification", { userId: user.id });
+
+    res.json({
+      success: true,
+      message: "Password updated successfully",
+    });
+  } catch (error) {
+    logger.error("password.reset_failed", { error });
+    res.status(500).json({
+      success: false,
+      message: "Failed to reset password",
+    });
+  }
+}

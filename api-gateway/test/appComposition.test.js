@@ -70,6 +70,18 @@ test("app composition keeps public auth allowlisted and internal auth private", 
     assert.equal(refresh.status, 200);
     assert.equal((await refresh.json()).name, "publicAuth");
 
+    const reset = await fetch(`${origin}/api/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: "user@example.com", password: "a-long-password" }),
+    });
+    assert.equal(reset.status, 200);
+    assert.deepEqual(await reset.json(), {
+      name: "publicAuth",
+      body: { identifier: "user@example.com", password: "a-long-password" },
+      user: null,
+    });
+
     for (const [method, path] of [
       ["POST", "/api/auth/validate-token"],
       ["GET", "/api/auth/internal/users/1"],

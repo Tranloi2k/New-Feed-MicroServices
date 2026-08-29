@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { signup } from "../src/controllers/authController.js";
+import { resetPassword, signup } from "../src/controllers/authController.js";
 import { findUsers, getFollowerIdsInternal, searchUsers } from "../src/controllers/profileController.js";
 
 function responseDouble() {
@@ -50,4 +50,20 @@ test("user search is case-insensitive, bounded, and excludes the viewer", async 
   assert.equal(args.where.id.not, 1);
   assert.equal(args.where.OR[0].username.mode, "insensitive");
   assert.equal(args.take, 8);
+});
+
+test("password reset rejects a short password before touching the database", async () => {
+  const res = responseDouble();
+  await resetPassword({ body: { identifier: "user@example.com", password: "short" } }, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.message, /at least 8 characters/);
+});
+
+test("password reset requires an identifier", async () => {
+  const res = responseDouble();
+  await resetPassword({ body: { password: "a-long-enough-password" } }, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.message, /required/);
 });

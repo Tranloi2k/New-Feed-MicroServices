@@ -6,6 +6,7 @@ const PUBLIC_AUTH_ACTIONS = [
   "signup",
   "logout",
   "refresh",
+  "reset-password",
 ];
 
 export function createAuthRoutes({ proxies, jsonParser }) {

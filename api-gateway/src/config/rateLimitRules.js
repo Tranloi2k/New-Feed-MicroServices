@@ -18,6 +18,12 @@ export const rateLimitRules = {
       maxRequests: 3,
       message: "Quá nhiều lần đăng ký. Vui lòng thử lại sau 1 giờ.",
     },
+    resetPassword: {
+      bucket: "auth:reset-password",
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 5,
+      message: "Quá nhiều lần đặt lại mật khẩu. Vui lòng thử lại sau 1 giờ.",
+    },
     default: {
       bucket: "auth:default",
       windowMs: 15 * 60 * 1000,
@@ -80,6 +86,7 @@ function graphqlDocumentContains(body, operationName) {
 export function getRateLimitRule(path, { method = "GET", body } = {}) {
   if (path === "/api/auth/login") return rateLimitRules.auth.login;
   if (path === "/api/auth/signup") return rateLimitRules.auth.signup;
+  if (path === "/api/auth/reset-password") return rateLimitRules.auth.resetPassword;
   if (path.startsWith("/api/auth/")) return rateLimitRules.auth.default;
 
   if (path === "/graphql/post") {

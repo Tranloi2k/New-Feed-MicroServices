@@ -123,3 +123,10 @@ test("trust proxy defaults to false and requires an explicit positive hop count"
   }
 });
 
+
+test("password reset gets its own strict rate limit bucket", () => {
+  const rule = getRateLimitRule("/api/auth/reset-password");
+  assert.equal(rule.bucket, "auth:reset-password");
+  assert.equal(rule.maxRequests, 5);
+  assert.notEqual(rule.bucket, getRateLimitRule("/api/auth/me").bucket);
+});

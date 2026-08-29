@@ -4,6 +4,7 @@ import {
   login,
   logout,
   refresh,
+  resetPassword,
   getCurrentUser,
   getUserById,
 } from "../controllers/authController.js";
@@ -17,6 +18,7 @@ router.post("/signup", signup);
 router.post("/login", login);
 router.post("/logout", logout);
 router.post("/refresh", refresh);
+router.post("/reset-password", resetPassword);
 // Protected routes (called from API Gateway with user info in headers)
 router.get("/me", requireUser, getCurrentUser);
 
