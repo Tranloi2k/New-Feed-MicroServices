@@ -11,6 +11,8 @@ spec:
       storageClass: local-path
       path: /data
     additionalArguments:
+      - "--api=true"
+      - "--api.insecure=true"
       - "--certificatesresolvers.letsencrypt.acme.email=tranloi162710@gmail.com"
       - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
