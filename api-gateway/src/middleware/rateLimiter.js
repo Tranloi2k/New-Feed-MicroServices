@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getRedisClient } from "../config/redis.js";
+import { extractAccessToken, verifyToken } from "./auth.js";
 import { getRateLimitRule } from "../config/rateLimitRules.js";
 import { logger } from "../utils/logger.js";
 
@@ -26,8 +27,21 @@ local oldest = redis.call("ZRANGE", key, 0, 0, "WITHSCORES")
 return {1, count + 1, oldest[2] or now}
 `;
 
-export function buildRateLimitKey(ip, bucket) {
-  return `rate_limit:${bucket}:${ip}`;
+export function buildRateLimitKey(identity, bucket) {
+  return `rate_limit:${bucket}:${identity}`;
+}
+
+/**
+ * Buckets an authenticated caller by user id rather than IP. Requests that
+ * originate from a server (Next.js server actions, for example) all share one
+ * egress address, so IP buckets would make every user compete for one quota.
+ * Anonymous traffic — login and signup above all — stays keyed by IP.
+ */
+export function identifyClient(req) {
+  const token = extractAccessToken(req);
+  const user = token ? verifyToken(token) : null;
+  if (user) return `user:${user.userId}`;
+  return `ip:${req.ip || req.socket?.remoteAddress || "unknown"}`;
 }
 
 export async function consumeRateLimit(
@@ -64,8 +78,8 @@ export function createRateLimiter({ redisProvider = getRedisClient } = {}) {
         method: req.method,
         body: req.body,
       });
-      const ip = req.ip || req.socket?.remoteAddress || "unknown";
-      const key = buildRateLimitKey(ip, rule.bucket);
+      const identity = identifyClient(req);
+      const key = buildRateLimitKey(identity, rule.bucket);
       const now = Date.now();
       const result = await consumeRateLimit(redis, key, rule, now);
       const resetAt = result.oldestTimestamp + rule.windowMs;
@@ -81,7 +95,7 @@ export function createRateLimiter({ redisProvider = getRedisClient } = {}) {
 
       const retryAfter = Math.max(1, Math.ceil((resetAt - now) / 1000));
       res.set("Retry-After", retryAfter);
-      logger.warn("Rate limit exceeded", { ip, bucket: rule.bucket });
+      logger.warn("Rate limit exceeded", { identity, bucket: rule.bucket });
 
       return res.status(429).json({
         success: false,

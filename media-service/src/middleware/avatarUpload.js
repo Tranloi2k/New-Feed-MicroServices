@@ -1,5 +1,11 @@
 import multer from "multer";
 
+/** 415 tells the caller the file type is the problem, not the server. */
+function unsupportedType(message) {
+  return Object.assign(new Error(message), { status: 415 });
+}
+
+
 const storage = multer.memoryStorage();
 
 const avatarUpload = multer({
@@ -17,7 +23,7 @@ const avatarUpload = multer({
       cb(null, true);
     } else {
       cb(
-        new Error(
+        unsupportedType(
           "Chỉ chấp nhận ảnh JPEG, PNG, GIF hoặc WebP (tối đa 2MB)."
         ),
         false

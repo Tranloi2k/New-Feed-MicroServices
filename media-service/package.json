@@ -8,7 +8,8 @@
     "dev": "nodemon src/app.js",
     "start": "node src/app.js",
     "migrate": "prisma migrate dev",
-    "generate": "prisma generate"
+    "generate": "prisma generate",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "express": "^4.18.2",

@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import mediaRoutes from "./routes/mediaRoutes.js";
+import { uploadErrorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 
@@ -26,14 +27,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error("Media service error:", err);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || "Internal server error",
-  });
-});
+app.use(uploadErrorHandler);
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {

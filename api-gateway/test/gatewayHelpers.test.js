@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import jwt from "jsonwebtoken";
 
 import { getRateLimitRule } from "../src/config/rateLimitRules.js";
 import { getTrustProxySetting } from "../src/config/services.js";
 import {
   buildRateLimitKey,
+  identifyClient,
   consumeRateLimit,
 } from "../src/middleware/rateLimiter.js";
 import {
@@ -129,4 +131,35 @@ test("password reset gets its own strict rate limit bucket", () => {
   assert.equal(rule.bucket, "auth:reset-password");
   assert.equal(rule.maxRequests, 5);
   assert.notEqual(rule.bucket, getRateLimitRule("/api/auth/me").bucket);
+});
+
+test("authenticated callers get their own rate-limit bucket, anonymous ones fall back to IP", () => {
+  const previousSecret = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = "helpers-test-secret";
+  try {
+    const token = jwt.sign({ userId: 42 }, process.env.JWT_SECRET);
+    const authenticated = {
+      headers: { authorization: `Bearer ${token}` },
+      ip: "10.0.0.9",
+    };
+    assert.equal(identifyClient(authenticated), "user:42");
+
+    // Two users behind one server IP must not share a quota.
+    const other = {
+      headers: { authorization: `Bearer ${jwt.sign({ userId: 43 }, process.env.JWT_SECRET)}` },
+      ip: "10.0.0.9",
+    };
+    assert.notEqual(identifyClient(authenticated), identifyClient(other));
+
+    assert.equal(identifyClient({ headers: {}, ip: "10.0.0.9" }), "ip:10.0.0.9");
+    assert.equal(
+      identifyClient({ headers: { authorization: "Bearer forged" }, ip: "10.0.0.9" }),
+      "ip:10.0.0.9",
+      "an invalid token must not create its own bucket"
+    );
+    assert.equal(identifyClient({ headers: {} }), "ip:unknown");
+  } finally {
+    if (previousSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previousSecret;
+  }
 });

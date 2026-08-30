@@ -13,7 +13,9 @@ export const serviceCircuitBreakerOptions = {
   notification: {},
   chat: {},
   media: {
-    timeout: 30_000,
+    // Must outlast media-service's own 45s Cloudinary timeout so a stalled
+    // upload returns that service's JSON error instead of a proxy failure.
+    timeout: 60_000,
     errorThresholdPercentage: 60,
     resetTimeout: 45_000,
   },
