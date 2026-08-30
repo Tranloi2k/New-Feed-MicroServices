@@ -4,6 +4,13 @@ import cacheService from "../services/cacheService.js";
 import pubsub, { COMMENT_EVENTS } from "../config/pubsub.js";
 import { withFilter } from "graphql-subscriptions";
 import { getPostIdentity } from "../services/postService.js";
+import {
+  attachReplies,
+  collectDescendantIds,
+  normalizePagination,
+  resolveParentComment,
+  validateContent,
+} from "../services/commentService.js";
 
 function formatComment(comment) {
   return {
@@ -23,7 +30,11 @@ const resolvers = {
   },
 
   Query: {
-    getComments: async (_, { postId, limit = 20, cursor }) => {
+    getComments: async (_, { postId, limit: requestedLimit, cursor: requestedCursor }) => {
+      const { limit, cursor } = normalizePagination({
+        limit: requestedLimit,
+        cursor: requestedCursor,
+      });
       try {
         const cached = await cacheService.getCachedCommentsList(
           postId,
@@ -50,18 +61,9 @@ const resolvers = {
         const hasMore = comments.length > limit;
         const commentsToReturn = hasMore ? comments.slice(0, -1) : comments;
 
-        const commentsWithReplies = await Promise.all(
-          commentsToReturn.map(async (comment) => {
-            const replies = await prisma.comment.findMany({
-              where: { parentCommentId: comment.id },
-              orderBy: { createdAt: "asc" },
-            });
-
-            return {
-              ...formatComment(comment),
-              replies: replies.map(formatComment),
-            };
-          })
+        const commentsWithReplies = await attachReplies(
+          commentsToReturn,
+          formatComment
         );
 
         const result = {
@@ -89,30 +91,35 @@ const resolvers = {
 
       const { postId, content, parentCommentId } = input;
 
-      if (!content || content.trim().length === 0) {
-        return {
-          success: false,
-          message: "Comment content is required",
-          comment: null,
-        };
+      const validated = validateContent(content);
+      if (validated.error) {
+        return { success: false, message: validated.error, comment: null };
       }
 
       try {
+        const parent = await resolveParentComment(parentCommentId, postId);
+        if (parent.error) {
+          return { success: false, message: parent.error, comment: null };
+        }
+
         const post = await getPostIdentity(postId);
+        // The identity headers carry only an id and an email, and the email must
+        // never reach another user's notification.
+        const author = await context.loaders.user.load(context.user.userId);
         const comment = await prisma.$transaction(async (tx) => {
           const created = await tx.comment.create({
             data: {
               postId,
               userId: context.user.userId,
-              content: content.trim(),
-              parentCommentId: parentCommentId || null,
+              content: validated.content,
+              parentCommentId: parent.parentCommentId,
             },
           });
           await enqueueEvent(tx, "comment.created", {
             comment: {
               ...created,
               authorId: created.userId,
-              authorName: context.user.email,
+              authorName: author?.username || "Người dùng",
               createdAt: created.createdAt.toISOString(),
               updatedAt: created.updatedAt.toISOString(),
             },
@@ -124,8 +131,8 @@ const resolvers = {
 
         await cacheService.invalidatePostComments(postId);
 
-        if (parentCommentId) {
-          await cacheService.invalidateSingleComment(parentCommentId);
+        if (parent.parentCommentId) {
+          await cacheService.invalidateSingleComment(parent.parentCommentId);
         }
 
         const commentPayload = {
@@ -179,13 +186,12 @@ const resolvers = {
           };
         }
 
-        const repliesToDelete = await prisma.comment.findMany({
-          where: { parentCommentId: id },
-          select: { id: true },
-        });
+        const descendantIds = await collectDescendantIds(id);
 
         await prisma.$transaction(async (tx) => {
-          await tx.comment.deleteMany({ where: { parentCommentId: id } });
+          if (descendantIds.length) {
+            await tx.comment.deleteMany({ where: { id: { in: descendantIds } } });
+          }
           await tx.comment.delete({ where: { id } });
           await enqueueEvent(tx, "comment.deleted", {
             commentId: id,
@@ -195,10 +201,8 @@ const resolvers = {
 
         await cacheService.invalidatePostComments(comment.postId);
         await cacheService.invalidateSingleComment(id);
-        if (repliesToDelete.length > 0) {
-          await cacheService.invalidateReplies(
-            repliesToDelete.map((r) => r.id)
-          );
+        if (descendantIds.length > 0) {
+          await cacheService.invalidateReplies(descendantIds);
         }
 
         await pubsub.publish(COMMENT_EVENTS.COMMENT_DELETED, {

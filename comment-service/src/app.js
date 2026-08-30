@@ -8,7 +8,6 @@ import { ApolloServerPluginDrainHttpServer } from "@apollo/server/plugin/drainHt
 import { WebSocketServer } from "ws";
 import { useServer } from "graphql-ws/lib/use/ws";
 import { makeExecutableSchema } from "@graphql-tools/schema";
-import bodyParser from "body-parser";
 import typeDefs from "./graphql/schema.js";
 import resolvers from "./graphql/resolvers.js";
 import { createUserLoader } from "./graphql/loaders/userLoader.js";
@@ -101,7 +100,7 @@ async function startServer() {
   // Apollo v4 uses expressMiddleware instead of applyMiddleware
   app.use(
     "/graphql",
-    bodyParser.json(),
+    // express.json() above already parsed the body for every route.
     expressMiddleware(apolloServer, {
       context: async ({ req }) => {
         if (getTrustedIdentity(req.headers)) {

@@ -7,6 +7,7 @@ import {
   resetPassword,
   getCurrentUser,
   getUserById,
+  getUsersByIds,
 } from "../controllers/authController.js";
 import { requireUser } from "../middleware/requireUser.js";
 import { requireServiceAuth } from "../middleware/serviceAuth.js";
@@ -23,6 +24,7 @@ router.post("/reset-password", resetPassword);
 router.get("/me", requireUser, getCurrentUser);
 
 // Internal routes (service-to-service)
+router.get("/internal/users", requireServiceAuth, getUsersByIds);
 router.get("/internal/users/:id", requireServiceAuth, getUserById);
 
 export default router;

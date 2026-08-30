@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resetPassword, signup } from "../src/controllers/authController.js";
+import { getUsersByIds, resetPassword, signup } from "../src/controllers/authController.js";
 import { findUsers, getFollowerIdsInternal, searchUsers } from "../src/controllers/profileController.js";
 
 function responseDouble() {
@@ -66,4 +66,21 @@ test("password reset requires an identifier", async () => {
 
   assert.equal(res.statusCode, 400);
   assert.match(res.body.message, /required/);
+});
+
+test("bulk user lookup rejects malformed and oversized id lists", async () => {
+  let res = responseDouble();
+  await getUsersByIds({ query: {} }, res);
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.message, /ids is required/);
+
+  res = responseDouble();
+  await getUsersByIds({ query: { ids: "1,abc,3" } }, res);
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.message, /positive integer/);
+
+  res = responseDouble();
+  await getUsersByIds({ query: { ids: Array.from({ length: 101 }, (_, i) => i + 1).join(",") } }, res);
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.message, /at most 100/);
 });

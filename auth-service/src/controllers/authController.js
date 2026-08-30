@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma.js";
-import { findUserById, toInternalUser } from "../services/userService.js";
+import { findUserById, findUsersByIds, toInternalUser } from "../services/userService.js";
 import { logger } from "../utils/logger.js";
 import {
   isValidUsername,
@@ -346,5 +346,41 @@ export async function resetPassword(req, res) {
       success: false,
       message: "Failed to reset password",
     });
+  }
+}
+
+const MAX_BULK_USER_IDS = 100;
+
+// Internal API: bulk user lookup so callers can batch instead of asking for one
+// user per request.
+export async function getUsersByIds(req, res) {
+  try {
+    const raw = String(req.query.ids || "").trim();
+    if (!raw) {
+      return res.status(400).json({ success: false, message: "ids is required" });
+    }
+
+    const parts = raw.split(",");
+    if (parts.length > MAX_BULK_USER_IDS) {
+      return res.status(400).json({
+        success: false,
+        message: `ids must contain at most ${MAX_BULK_USER_IDS} entries`,
+      });
+    }
+
+    const ids = [];
+    for (const part of parts) {
+      const parsed = positiveInteger(part.trim(), "ids");
+      if (parsed.error) {
+        return res.status(400).json({ success: false, message: parsed.error });
+      }
+      ids.push(parsed.value);
+    }
+
+    const users = await findUsersByIds(ids);
+    return res.json({ success: true, data: users.map(toInternalUser) });
+  } catch (error) {
+    logger.error("user.internal_bulk_lookup_failed", { error });
+    return res.status(500).json({ success: false, message: "Failed to get users" });
   }
 }
