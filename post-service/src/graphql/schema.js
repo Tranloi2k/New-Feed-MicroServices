@@ -18,6 +18,7 @@ const typeDefs = gql`
     mediaUrls: [String]
     location: String
     likeCount: Int!
+    isLiked: Boolean!
     commentCount: Int!
     shareCount: Int!
     createdAt: String!
@@ -43,6 +44,13 @@ const typeDefs = gql`
     post: Post
   }
 
+  type TogglePostLikeResponse {
+    success: Boolean!
+    message: String!
+    liked: Boolean!
+    post: Post
+  }
+
   type Query {
     getNewsFeed(limit: Int, cursor: Int): NewsFeedResponse!
     getUserPosts(userId: Int!, limit: Int, cursor: Int): NewsFeedResponse!
@@ -53,6 +61,7 @@ const typeDefs = gql`
   type Mutation {
     createPost(input: CreatePostInput!): CreatePostResponse!
     deletePost(id: Int!): CreatePostResponse!
+    togglePostLike(postId: Int!): TogglePostLikeResponse!
   }
 `;
 

@@ -2,6 +2,7 @@ import prisma from "../lib/prisma.js";
 import { enqueueEvent } from "../services/eventPublisher.js";
 import { getFollowingIds } from "../services/userService.js";
 import cacheService from "../services/cacheService.js";
+import { togglePostLike } from "../services/postLikeService.js";
 
 async function paginatePosts(where, limit = 10, cursor) {
   const posts = await prisma.post.findMany({
@@ -54,6 +55,15 @@ const resolvers = {
     user: (post, _, context) => {
       if (!post?.userId) return null;
       return context.loaders.user.load(post.userId);
+    },
+    isLiked: async (post, _, context) => {
+      if (!context.user || !post?.id) return false;
+      const like = await prisma.postLike.findUnique({
+        where: {
+          postId_userId: { postId: post.id, userId: context.user.userId },
+        },
+      });
+      return Boolean(like);
     },
   },
 
@@ -256,6 +266,47 @@ const resolvers = {
         return {
           success: false,
           message: "Failed to delete post",
+          post: null,
+        };
+      }
+    },
+
+    togglePostLike: async (_, { postId }, context) => {
+      if (!context.user) {
+        throw new Error("Unauthorized. Please login first.");
+      }
+
+      try {
+        const result = await prisma.$transaction((tx) =>
+          togglePostLike(tx, {
+            postId,
+            userId: context.user.userId,
+            likedByName: context.user.email?.split("@")[0] || "Someone",
+          }, enqueueEvent)
+        );
+
+        if (!result) {
+          return {
+            success: false,
+            message: "Post not found",
+            liked: false,
+            post: null,
+          };
+        }
+
+        await cacheService.invalidatePost(postId);
+        return {
+          success: true,
+          message: result.liked ? "Post liked" : "Post unliked",
+          liked: result.liked,
+          post: formatPost(result.post),
+        };
+      } catch (error) {
+        console.error("Error toggling post like:", error);
+        return {
+          success: false,
+          message: "Failed to update like",
+          liked: false,
           post: null,
         };
       }

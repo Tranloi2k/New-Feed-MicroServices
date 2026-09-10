@@ -26,10 +26,22 @@ model Post {
   shareCount   Int       @default(0) @map("share_count")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
+  likes        PostLike[]
 
   @@index([userId, createdAt])
   @@index([createdAt])
   @@map("posts")
+}
+
+model PostLike {
+  postId    Int      @map("post_id")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+  @@map("post_likes")
 }
 
 model OutboxEvent {
