@@ -10,7 +10,8 @@ model User {
   id           Int      @id @default(autoincrement())
   username     String   @unique
   email        String   @unique @db.Citext
-  passwordHash String   @map("password_hash")
+  // Null for accounts created through OAuth that never set a password.
+  passwordHash String?  @map("password_hash")
   fullName     String?  @map("full_name")
   avatarUrl    String?  @map("avatar_url")
   bio          String?
@@ -21,6 +22,7 @@ model User {
   followers Follow[] @relation("UserFollowers")
   following Follow[] @relation("UserFollowing")
   refreshTokens RefreshToken[]
+  oauthAccounts OAuthAccount[]
   sentFollowRequests FollowRequest[] @relation("FollowRequestSender")
   receivedFollowRequests FollowRequest[] @relation("FollowRequestRecipient")
 
@@ -43,6 +45,20 @@ model RefreshToken {
   @@index([familyId])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+model OAuthAccount {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @map("user_id")
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@map("oauth_accounts")
 }
 
 model Follow {

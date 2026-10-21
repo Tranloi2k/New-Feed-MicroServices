@@ -30,6 +30,19 @@ export function getJwtClaims() {
   return { issuer, audience };
 }
 
+/** OAuth providers are optional; a provider without credentials is disabled. */
+export function getOAuthConfig(env = process.env) {
+  // Comma-separated so web and native clients can share one backend.
+  const googleClientIds = (env.GOOGLE_CLIENT_ID || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  return {
+    google: googleClientIds.length ? { clientIds: googleClientIds } : null,
+  };
+}
+
 export function validateEnv() {
   requireValue("DATABASE_URL");
   const jwtSecret = requireValue("JWT_SECRET");

@@ -82,7 +82,21 @@ test("app composition keeps public auth allowlisted and internal auth private", 
       user: null,
     });
 
+    const oauth = await fetch(`${origin}/api/auth/oauth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken: "id-token" }),
+    });
+    assert.equal(oauth.status, 200);
+    assert.deepEqual(await oauth.json(), {
+      name: "publicAuth",
+      body: { idToken: "id-token" },
+      user: null,
+    });
+
     for (const [method, path] of [
+      ["GET", "/api/auth/oauth/google"],
+      ["POST", "/api/auth/oauth/google/extra"],
       ["POST", "/api/auth/validate-token"],
       ["GET", "/api/auth/internal/users/1"],
       ["POST", "/api/auth/internal/users/1"],

@@ -13,7 +13,12 @@ import {
   rotateSession,
   setSessionCookies,
 } from "../services/tokenService.js";
+import {
+  findOrCreateOAuthUser,
+  verifyOAuthIdentity,
+} from "../services/oauthService.js";
 import { getBcryptRounds } from "../config/env.js";
+import { AppError } from "../utils/appError.js";
 import {
   normalizeEmail,
   optionalText,
@@ -181,6 +186,45 @@ export async function login(req, res) {
     res.status(500).json({
       success: false,
       message: "Login failed",
+    });
+  }
+}
+
+// OAuth login: exchange a provider token for a NewFeed session.
+export async function oauthLogin(req, res, deps = {}) {
+  const {
+    verifyIdentity = verifyOAuthIdentity,
+    findOrCreateUser = findOrCreateOAuthUser,
+    createSession = issueSession,
+  } = deps;
+  const provider = req.params?.provider;
+
+  try {
+    const { idToken } = req.body || {};
+    const identity = await verifyIdentity(provider, { idToken });
+    const user = await findOrCreateUser(identity);
+    const session = await createSession(user);
+    setSessionCookies(res, session);
+
+    res.json({
+      success: true,
+      message: "Login successful",
+      data: sessionData(req, session),
+    });
+  } catch (error) {
+    if (error instanceof AppError && error.status < 500) {
+      return res.status(error.status).json({
+        success: false,
+        code: error.code,
+        message: error.message,
+      });
+    }
+
+    logger.error("oauth.login_failed", { error, provider });
+    const unavailable = error instanceof AppError && error.status === 502;
+    res.status(unavailable ? 502 : 500).json({
+      success: false,
+      message: unavailable ? error.message : "OAuth login failed",
     });
   }
 }

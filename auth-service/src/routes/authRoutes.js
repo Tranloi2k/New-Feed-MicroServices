@@ -2,6 +2,7 @@ import express from "express";
 import {
   signup,
   login,
+  oauthLogin,
   logout,
   refresh,
   resetPassword,
@@ -17,6 +18,7 @@ const router = express.Router();
 // Public routes
 router.post("/signup", signup);
 router.post("/login", login);
+router.post("/oauth/:provider", (req, res) => oauthLogin(req, res));
 router.post("/logout", logout);
 router.post("/refresh", refresh);
 router.post("/reset-password", resetPassword);
